@@ -20,9 +20,12 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'password',
         'phone',
-        'role_id',
+        'role_id',          // foreign key to Role
+        'role',             // string role (admin/user/vendor)
+        'status',           // account status
         'avatar',
         'email_verified_at',
+        'last_login_at',
     ];
 
     /**
@@ -38,6 +41,8 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'last_login_at' => 'datetime',
+        'status' => 'boolean',
     ];
 
     // ----------------------------
@@ -49,6 +54,29 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     // ----------------------------
+    // Relationship: User has one Vendor (if role = vendor)
+    // ----------------------------
+    public function vendor()
+    {
+        return $this->hasOne(Vendor::class);
+    }
+
+    // ----------------------------
+    // Relationship: User has many Orders (if applicable)
+    // ----------------------------
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function cart() { return $this->hasOne(Cart::class); }
+    public function wishlists() { return $this->hasMany(Wishlist::class); }
+    public function reviews() { return $this->hasMany(Review::class); }
+    public function notifications() { return $this->hasMany(Notification::class); }
+    public function activityLogs() { return $this->hasMany(ActivityLog::class); }
+
+
+    // ----------------------------
     // Check if user has a permission
     // ----------------------------
     public function hasPermission(string $module, string $action): bool
@@ -58,5 +86,13 @@ class User extends Authenticatable implements MustVerifyEmail
         $permissions = json_decode($this->role->permissions, true);
 
         return isset($permissions[$module]) && in_array($action, $permissions[$module]);
+    }
+
+    // ----------------------------
+    // Helper: Check if user is active
+    // ----------------------------
+    public function isActive(): bool
+    {
+        return $this->status === 1;
     }
 }

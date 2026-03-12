@@ -12,9 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('user_profiles', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+    $table->string('avatar')->nullable();
+    $table->string('gender',20)->nullable();
+    $table->date('date_of_birth')->nullable();
+    $table->text('bio')->nullable();
+    $table->timestamps();
+});
     }
 
     /**

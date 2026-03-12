@@ -12,9 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('vendor_transactions', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('vendor_id')->constrained()->cascadeOnDelete();
+    $table->foreignId('order_item_id')->constrained()->cascadeOnDelete();
+
+    $table->decimal('amount',12,2);
+    $table->decimal('commission',12,2);
+    $table->decimal('net_amount',12,2);
+
+    $table->string('status');
+    $table->timestamps();
+});
     }
 
     /**

@@ -12,9 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('role_permissions', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('role_id')->constrained()->cascadeOnDelete();
+    $table->foreignId('permission_id')->constrained()->cascadeOnDelete();
+});
     }
 
     /**

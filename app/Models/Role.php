@@ -11,7 +11,7 @@ class Role extends Model
 
     protected $fillable = [
         'name',
-        'permissions',
+        'permissions', // legacy JSON permissions (optional)
     ];
 
     protected $casts = [
@@ -24,5 +24,21 @@ class Role extends Model
     public function users()
     {
         return $this->hasMany(User::class);
+    }
+
+    // ----------------------------
+    // Relationship: Role belongs to many Permissions (via role_permissions pivot)
+    // ----------------------------
+    public function permissionsList()
+    {
+        return $this->belongsToMany(Permission::class, 'role_permissions');
+    }
+
+    // ----------------------------
+    // Check if Role has a permission
+    // ----------------------------
+    public function hasPermission(string $permissionName): bool
+    {
+        return $this->permissionsList()->where('name', $permissionName)->exists();
     }
 }

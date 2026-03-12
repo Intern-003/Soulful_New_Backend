@@ -12,9 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('product_variants', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('product_id')->constrained()->cascadeOnDelete();
+    $table->string('sku');
+    $table->string('barcode')->nullable();
+    $table->decimal('price',10,2);
+    $table->decimal('discount_price',10,2)->nullable();
+    $table->integer('stock');
+    $table->decimal('weight',8,2)->nullable();
+    $table->string('image')->nullable();
+    $table->timestamps();
+});
     }
 
     /**

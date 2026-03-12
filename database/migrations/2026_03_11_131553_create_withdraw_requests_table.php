@@ -12,9 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('withdraw_requests', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('vendor_id')->constrained()->cascadeOnDelete();
+
+    $table->decimal('amount',12,2);
+    $table->string('status');
+
+    $table->timestamp('requested_at')->useCurrent();
+    $table->timestamp('approved_at')->nullable();
+
+    $table->timestamps();
+});
     }
 
     /**
