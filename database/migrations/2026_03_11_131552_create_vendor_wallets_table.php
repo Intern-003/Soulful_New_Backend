@@ -12,9 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('vendor_wallets', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('vendor_id')->constrained()->cascadeOnDelete();
+    $table->decimal('balance',12,2)->default(0);
+    $table->timestamps();
+});
     }
 
     /**

@@ -12,9 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('payments', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('order_id')->constrained()->cascadeOnDelete();
+
+    $table->string('payment_gateway');
+    $table->string('transaction_id')->nullable();
+    $table->decimal('amount',12,2);
+    $table->string('status');
+
+    $table->timestamp('paid_at')->nullable();
+    $table->timestamps();
+});
     }
 
     /**

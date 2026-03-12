@@ -12,9 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('brands', function (Blueprint $table) {
-            $table->id();
-            $table->timestamps();
-        });
+    $table->id();
+    $table->string('name');
+    $table->string('slug')->nullable();
+    $table->string('logo')->nullable();
+    $table->boolean('status')->default(1);
+    $table->timestamps();
+});
     }
 
     /**

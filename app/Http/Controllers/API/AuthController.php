@@ -105,16 +105,39 @@ class AuthController extends Controller
     // ----------------------------
     // Forgot Password (Send Reset Link)
     // ----------------------------
+    // public function forgotPassword(Request $request)
+    // {
+    //     $request->validate(['email' => 'required|email']);
+
+    //     $status = Password::sendResetLink($request->only('email'));
+
+    //     return $status === Password::RESET_LINK_SENT
+    //         ? response()->json(['message' => __($status)])
+    //         : response()->json(['message' => __($status)], 422);
+    // }
+
     public function forgotPassword(Request $request)
-    {
-        $request->validate(['email' => 'required|email']);
-
-        $status = Password::sendResetLink($request->only('email'));
-
-        return $status === Password::RESET_LINK_SENT
-            ? response()->json(['message' => __($status)])
-            : response()->json(['message' => __($status)], 422);
+{
+    $request->validate(['email' => 'required|email']);
+    
+    // Find the user
+    $user = User::where('email', $request->email)->first();
+    
+    if (!$user) {
+        return response()->json(['message' => 'User not found'], 404);
     }
+    
+    // Generate a token manually
+    $token = app('auth.password.broker')->createToken($user);
+    
+    // FOR TESTING: Return the token directly
+    return response()->json([
+        'message' => 'Reset link generated (TESTING MODE)',
+        'reset_token' => $token,
+        'email' => $user->email,
+        'reset_url' => 'http://your-frontend.com/reset-password?token=' . $token . '&email=' . $user->email
+    ]);
+}
 
     // ----------------------------
     // Reset Password
@@ -205,39 +228,55 @@ class AuthController extends Controller
     // ----------------------------
     // Upload Avatar
     // ----------------------------
-    public function uploadAvatar(Request $request)
-    {
-        $request->validate([
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
+    // ----------------------------
+// Upload Avatar
+// ----------------------------
+public function uploadAvatar(Request $request)
+{
+    $request->validate([
+        'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ]);
 
-        $user = $request->user();
+    $user = $request->user();
 
-        // Delete old avatar
-        if ($user->avatar) {
-            Storage::delete($user->avatar);
-        }
+    $file = $request->file('avatar');
 
-        $path = $request->file('avatar')->store('avatars', 'public');
-        $user->avatar = $path;
-        $user->save();
+    // original filename
+    $originalName = $file->getClientOriginalName();
 
-        return response()->json(['avatar' => $path]);
+    // get filename without extension
+    $name = pathinfo($originalName, PATHINFO_FILENAME);
+
+    // extension
+    $extension = $file->getClientOriginalExtension();
+
+    // new filename
+    $filename = $name . '_' . $user->id . '.' . $extension;
+
+    // upload path
+    $destination = public_path('uploads/avatars');
+
+    // create folder if not exists
+    if (!file_exists($destination)) {
+        mkdir($destination, 0755, true);
     }
 
-    // ----------------------------
-    // Delete Avatar
-    // ----------------------------
-    public function deleteAvatar(Request $request)
-    {
-        $user = $request->user();
-
-        if ($user->avatar) {
-            Storage::delete($user->avatar);
-            $user->avatar = null;
-            $user->save();
-        }
-
-        return response()->json(['message' => 'Avatar deleted']);
+    // delete old avatar
+    if ($user->avatar && file_exists(public_path($user->avatar))) {
+        unlink(public_path($user->avatar));
     }
+
+    // move file
+    $file->move($destination, $filename);
+
+    // save path in DB
+    $user->avatar = 'uploads/avatars/' . $filename;
+    $user->save();
+
+    return response()->json([
+        'message' => 'Avatar uploaded successfully',
+        'avatar' => $user->avatar,
+        'url' => url($user->avatar)
+    ]);
+}
 }
