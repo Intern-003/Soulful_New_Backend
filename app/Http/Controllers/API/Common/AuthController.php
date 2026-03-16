@@ -25,6 +25,7 @@ class AuthController extends Controller
             'phone' => 'nullable|string',
             'role_id' => 'required|exists:roles,id',
         ]);
+        
 
         $user = User::create([
             'name' => $request->name,
@@ -33,9 +34,9 @@ class AuthController extends Controller
             'phone' => $request->phone,
             'role_id' => $request->role_id,
         ]);
-
+//
         $token = $user->createToken('auth_token')->plainTextToken;
-
+//dd($token);
         return response()->json([
             'user' => $user,
             'access_token' => $token,

@@ -10,8 +10,13 @@ use App\Http\Controllers\API\Common\AddressController;
 use App\Http\Controllers\API\User\CartController;
 use App\Http\Controllers\API\User\WishlistController;
 use App\Http\Controllers\API\User\CheckoutController;
-
+use App\Http\Controllers\API\User\OrderController;
 use App\Http\Controllers\API\User\VendorStoreController;
+use App\Http\Controllers\API\User\WalletController;
+use App\Http\Controllers\API\Vendor\VendorWalletController;
+use App\Http\Controllers\API\User\ShipmentController;
+use App\Http\Controllers\API\Vendor\VendorDashboardController;
+use App\Http\Controllers\API\Vendor\VendorInventoryController;
 
 Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login', [AuthController::class, 'login']);
@@ -88,3 +93,42 @@ Route::get('/{slug}/products',[VendorStoreController::class,'products']);
 Route::get('/{slug}/reviews',[VendorStoreController::class,'reviews']);
 
 });
+
+Route::prefix('orders')->group(function(){
+
+Route::get('/',[OrderController::class,'index']);
+Route::get('/{id}',[OrderController::class,'show']);
+Route::get('/{id}/track',[OrderController::class,'track']);
+Route::get('/{id}/shipment',[OrderController::class,'shipment']);
+Route::get('/{id}/tracking',[OrderController::class,'tracking']);
+Route::get('/{id}/invoice',[OrderController::class,'invoice']);
+
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+
+    Route::get('/wallet', [WalletController::class,'wallet']);
+    Route::get('/wallet/transactions', [WalletController::class,'transactions']);
+
+    Route::get('/vendor/wallet', [VendorWalletController::class,'wallet']);
+    Route::get('/vendor/wallet/transactions', [VendorWalletController::class,'transactions']);
+
+});
+
+Route::get('/orders/{id}/shipment',[ShipmentController::class,'shipment']);
+Route::get('/orders/{id}/tracking',[ShipmentController::class,'tracking']);
+
+
+Route::middleware('auth:sanctum')->group(function(){
+
+Route::get('/vendor/dashboard',[VendorDashboardController::class,'dashboard']);
+
+Route::get('/vendor/dashboard/stats',[VendorDashboardController::class,'stats']);
+
+Route::get('/vendor/orders/summary',[VendorDashboardController::class,'ordersSummary']);
+
+});
+
+Route::get('/vendor/inventory/{vendor_id}',[VendorInventoryController::class,'inventory']);
+
+Route::get('/vendor/products/low-stock/{vendor_id}',[VendorInventoryController::class,'lowStock']);
