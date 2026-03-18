@@ -17,6 +17,23 @@ use App\Http\Controllers\API\Vendor\VendorWalletController;
 use App\Http\Controllers\API\User\ShipmentController;
 use App\Http\Controllers\API\Vendor\VendorDashboardController;
 use App\Http\Controllers\API\Vendor\VendorInventoryController;
+use App\Http\Controllers\API\Admin\AdminCategoryController;
+use App\Http\Controllers\API\Admin\AdminAttributeController;
+use App\Http\Controllers\API\Admin\AdminAttributeValueController;
+use App\Http\Controllers\API\Admin\AdminCommissionController;
+use App\Http\Controllers\API\Admin\AdminBannerController;
+use App\Http\Controllers\API\Admin\AdminRoleController;
+use App\Http\Controllers\API\Admin\AdminPermissionController;
+use App\Http\Controllers\API\Vendor\VendorProductController;
+use App\Http\Controllers\API\Vendor\ProductImageController;
+use App\Http\Controllers\API\Vendor\VendorVariantController;
+use App\Http\Controllers\API\Vendor\VendorCouponController;
+use App\Http\Controllers\API\Vendor\VendorRegisterController;
+use App\Http\Controllers\API\Vendor\VendorDocumentController;
+use App\Http\Controllers\API\Vendor\VendorOrderController;
+use App\Http\Controllers\API\Vendor\ProductQuestionController;
+
+
 use App\Http\Controllers\API\User\PaymentController;
 
 Route::post('auth/register', [AuthController::class, 'register']);
@@ -166,6 +183,40 @@ Route::get('/vendor/orders/summary',[VendorDashboardController::class,'ordersSum
 Route::get('/vendor/inventory/{vendor_id}',[VendorInventoryController::class,'inventory']);
 
 Route::get('/vendor/products/low-stock/{vendor_id}',[VendorInventoryController::class,'lowStock']);
+
+
+Route::post('/admin/categories',[AdminCategoryController::class,'store']);
+Route::post('/admin/subcategories',[AdminCategoryController::class,'storeSubcategory']);
+Route::post('/admin/attributes',[AdminAttributeController::class,'store']);
+Route::post('/admin/attributes/{id}/values', [AdminAttributeValueController::class,'store']);
+Route::post('/admin/commissions',[AdminCommissionController::class,'store']);
+Route::post('/admin/banners',[AdminBannerController::class,'store']);
+Route::post('/admin/roles',[AdminRoleController::class,'store']);
+Route::post('/admin/permissions',[AdminPermissionController::class,'store']);
+Route::post('/vendor/products',[VendorProductController::class,'store']);
+Route::post('/vendor/products/{id}/images',[ProductImageController::class,'store']);
+Route::post('/vendor/products/{id}/variants',[VendorVariantController::class,'store']);
+Route::post('/vendor/coupons',[VendorCouponController::class,'store']);
+Route::post('/vendor/wallet/withdraw',[VendorWalletController::class,'withdraw']);
+Route::post('/vendor/register',[VendorRegisterController::class,'register']);
+Route::post('/vendor/documents',[VendorDocumentController::class,'store']);
+Route::post('/vendor/orders/{id}/shipment',[VendorOrderController::class,'createShipment']);
+Route::post('/products/questions/{id}/answer', [ProductQuestionController::class, 'answer']);
+Route::post('/products/{id}/questions', [ProductQuestionController::class, 'store']);
+Route::get('/products/{id}/questions', [ProductQuestionController::class, 'index']);
+Route::middleware('auth:sanctum')->delete('/profile/avatar', [ProfileController::class, 'deleteAvatar']);
+Route::middleware('auth:sanctum')->delete('/addresses/{id}', [AddressController::class, 'deleteAddress']);
+Route::middleware(['auth:sanctum', 'is_admin'])
+    ->delete('/admin/categories/{id}', [AdminCategoryController::class, 'deleteCategory']);
+Route::middleware(['auth:sanctum', 'is_admin'])
+    ->delete('/admin/subcategories/{id}', [AdminCategoryController::class, 'deleteSubcategory']);
+Route::middleware('auth:sanctum')
+    ->delete('/vendor/products/images/{id}', [ProductImageController::class, 'deleteProductImage']);
+Route::middleware(['auth:sanctum', 'is_admin'])
+    ->delete('/admin/attributes/{id}', [AdminAttributeController::class, 'deleteAttribute']);
+Route::middleware(['auth:sanctum', 'is_admin'])
+    ->delete('/admin/attribute-values/{id}', [AdminAttributeValueController::class, 'deleteAttributeValue']);
+    
 
 
 ////Post///
