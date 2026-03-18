@@ -14,9 +14,45 @@ class AddressController extends Controller
         return response()->json($addresses);
     }
 
-    public function getAddressById(Request $request,int $id){
-        $address=Address::findOrFail($id);
+    public function getAddress(Request $request)
+{
+    $user = auth()->user();
 
-        return response()->json($address);
+    $addresses = Address::where('user_id', $user->id)->get();
+
+    return response()->json($addresses);
+}
+
+    public function store(Request $request){
+        $user=auth()->user();
+
+        $validated=$request->validate([
+            'name'=> 'required|string|max:255',
+            'phone'=>'required|string|max:15',
+            'address_line1'=>'required|string',
+            'address_line2'=>'nullable|string',
+            'city'=>'required|string',
+            'state'=>'required|string',
+            'country'=>'required|string',
+            'postal_code'=>'required|string',
+            'is_default'=>'nullable|boolean',
+            ]);
+
+            //If 
+            if(!empty($validated['is_default']) && $validated['is_default']){
+                Address::where('user_id',$user->id)
+                    ->update(['is_default'=>false]);
+            }
+
+            $address=Address::create([
+                'user_id'=>$user->id,
+                ...$validated
+            ]);
+
+            return response()->json([
+                'message'=> "Address added successfully",
+                'data'=>$address
+            ],201);
     }
+    
 }

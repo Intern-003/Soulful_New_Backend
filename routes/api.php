@@ -17,6 +17,7 @@ use App\Http\Controllers\API\Vendor\VendorWalletController;
 use App\Http\Controllers\API\User\ShipmentController;
 use App\Http\Controllers\API\Vendor\VendorDashboardController;
 use App\Http\Controllers\API\Vendor\VendorInventoryController;
+use App\Http\Controllers\API\User\PaymentController;
 
 Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login', [AuthController::class, 'login']);
@@ -24,16 +25,26 @@ Route::post('auth/login', [AuthController::class, 'login']);
 Route::get('profiles', [ProfileController::class, 'getProfiles']);
 Route::get('profile/{id}', [ProfileController::class, 'getProfileById']);
 Route::get('addresses', [AddressController::class, 'getAddresses']);
-Route::get('address/{id}', [AddressController::class, 'getAddressById']);
 Route::get('carts', [CartController::class, 'getCarts']);
-Route::get('cart', [CartController::class, 'getCart']);
+Route::post('/cart/add', [CartController::class, 'addToCart']);
+Route::get('/cart', [CartController::class, 'getCart']);
+    
 Route::get('wishlists', [WishlistController::class, 'getWishlists']);
-Route::get('wishlist', [WishlistController::class, 'getWishlist']);
+
 
 Route::middleware('auth:sanctum')->group(function(){
     Route::get('/checkout/summary', [CheckoutController::class,'summary']);
     Route::get('/checkout/data', [CheckoutController::class,'data']);
+    Route::post('/checkout/validate', [CheckoutController::class, 'validateCheckout']);
+    Route::post('/place-order', [CheckoutController::class, 'checkout']);
 });
+
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/address', [AddressController::class, 'getAddress']);
+    Route::post('/address', [AddressController::class, 'store']);
+});
+    
 Route::get('/shipping/methods', [CheckoutController::class,'shippingMethods']);
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -46,14 +57,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('profile/avatar', [AuthController::class, 'uploadAvatar']);
     Route::delete('profile/avatar', [AuthController::class, 'deleteAvatar']);
     Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
+
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('wishlist', [WishlistController::class, 'getWishlist']);
+    Route::post('/wishlist', [WishlistController::class, 'store']);
 });
 
 Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
 
 
-Route::prefix('categories')->group(function () {
 
+
+Route::prefix('categories')->group(function () {
     Route::get('/', [CategoryController::class, 'index']);
     Route::get('/{id}', [CategoryController::class, 'show']);
     Route::get('/{id}/children', [CategoryController::class, 'children']);
@@ -62,7 +80,6 @@ Route::prefix('categories')->group(function () {
 
 
 Route::prefix('products')->group(function () {
-
     // Special routes FIRST
     Route::get('/search', [ProductController::class, 'search']);
     Route::get('/featured', [ProductController::class, 'featured']);
@@ -94,15 +111,34 @@ Route::get('/{slug}/reviews',[VendorStoreController::class,'reviews']);
 
 });
 
-Route::prefix('orders')->group(function(){
+Route::middleware('auth:sanctum')->prefix('orders')->group(function(){
 
-Route::get('/',[OrderController::class,'index']);
-Route::get('/{id}',[OrderController::class,'show']);
-Route::get('/{id}/track',[OrderController::class,'track']);
-Route::get('/{id}/shipment',[OrderController::class,'shipment']);
-Route::get('/{id}/tracking',[OrderController::class,'tracking']);
-Route::get('/{id}/invoice',[OrderController::class,'invoice']);
+    Route::get('/', [OrderController::class,'index']);
+    Route::get('/{id}', [OrderController::class,'show']);
+    Route::get('/{id}/track', [OrderController::class,'track']);
+    Route::get('/{id}/shipment', [OrderController::class,'shipment']);
+    Route::get('/{id}/tracking', [OrderController::class,'tracking']);
+    Route::get('/{id}/invoice', [OrderController::class,'invoice']);
 
+    Route::post('/', [OrderController::class,'store']);
+    Route::post('/{id}/cancel', [OrderController::class,'cancel']);
+    Route::post('/{id}/return', [OrderController::class,'return']);
+    Route::post('/{id}/exchange', [OrderController::class,'exchange']);
+
+});
+
+
+Route::middleware('auth:sanctum')->group(function () {
+
+    Route::post('/payment/create-order', [PaymentController::class, 'createOrder']);
+    Route::post('/payment/verify', [PaymentController::class, 'verify']);
+    Route::get('/payment/status/{order_id}', [PaymentController::class, 'status']);
+
+});
+
+// Admin
+Route::middleware(['auth:sanctum','admin'])->group(function () {
+    Route::post('/payment/refund', [PaymentController::class, 'refund']);
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -115,8 +151,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
-Route::get('/orders/{id}/shipment',[ShipmentController::class,'shipment']);
-Route::get('/orders/{id}/tracking',[ShipmentController::class,'tracking']);
 
 
 Route::middleware('auth:sanctum')->group(function(){
@@ -132,3 +166,6 @@ Route::get('/vendor/orders/summary',[VendorDashboardController::class,'ordersSum
 Route::get('/vendor/inventory/{vendor_id}',[VendorInventoryController::class,'inventory']);
 
 Route::get('/vendor/products/low-stock/{vendor_id}',[VendorInventoryController::class,'lowStock']);
+
+
+////Post///
