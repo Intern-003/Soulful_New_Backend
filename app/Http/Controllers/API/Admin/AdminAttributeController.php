@@ -65,5 +65,42 @@ class AdminAttributeController extends Controller
     ]);
 }
 
+public function updateAttribute(Request $request, $id)
+{
+    $attribute = Attribute::find($id);
+
+    if (!$attribute) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Attribute not found'
+        ], 404);
+    }
+
+    $request->validate([
+        'name' => 'required|string|max:255|unique:attributes,name,' . $id
+    ]);
+
+    $slug = Str::slug($request->name);
+
+    // Ensure unique slug
+    $count = Attribute::where('slug', 'LIKE', $slug . '%')
+        ->where('id', '!=', $id)
+        ->count();
+
+    if ($count > 0) {
+        $slug = $slug . '-' . ($count + 1);
+    }
+
+    $attribute->update([
+        'name' => $request->name,
+        'slug' => $slug
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Attribute updated successfully',
+        'data' => $attribute
+    ]);
+}
 
 }

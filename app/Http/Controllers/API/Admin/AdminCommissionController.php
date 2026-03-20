@@ -30,4 +30,30 @@ class AdminCommissionController extends Controller
         ]);
     }
 
+    public function updateVendorCommission(Request $request, $id)
+{
+    $vendor = Vendor::find($id);
+
+    if (!$vendor) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Vendor not found'
+        ], 404);
+    }
+
+    $request->validate([
+        'commission_rate' => 'required|numeric|min:0|max:100'
+    ]);
+
+    $vendor->update([
+        'commission_rate' => $request->commission_rate
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Vendor commission updated successfully',
+        'data' => $vendor
+    ]);
+}
+
 }

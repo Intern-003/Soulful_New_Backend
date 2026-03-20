@@ -46,114 +46,117 @@ class VendorCouponController extends Controller
     }
 
     // PUT /vendor/coupons/{id}
-    public function update(Request $request, $id)
-    {
-        $coupon = Coupon::find($id);
+public function update(Request $request, $id)
+{
+    $coupon = Coupon::find($id);
 
-        // Check if coupon exists
-        if (!$coupon) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Coupon not found'
-            ], 404);
-        }
-
-        // Ownership check - verify this coupon belongs to the vendor
-        $user = Auth::user();
-        // if ($coupon->vendor_id !== $user->vendor_id) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'Unauthorized to update this coupon'
-        //     ], 403);
-        // }
-
-        // Validate request
-        $request->validate([
-            'code' => 'sometimes|string|unique:coupons,code,' . $id,
-            'type' => 'sometimes|in:fixed,percent',
-            'value' => 'sometimes|numeric|min:0',
-            'min_order_amount' => 'nullable|numeric|min:0',
-            'max_discount' => 'nullable|numeric|min:0',
-            'usage_limit' => 'nullable|integer|min:1',
-            'start_date' => 'sometimes|date',
-            'expiry_date' => 'sometimes|date|after:start_date',
-            'status' => 'sometimes|boolean'
-        ]);
-
-        // Additional validation for percentage value
-        if ($request->has('type') && $request->type === 'percent' && $request->has('value')) {
-            if ($request->value > 100) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Percentage value cannot exceed 100'
-                ], 422);
-            }
-        }
-
-        // Prepare data for update
-        $updateData = $request->only([
-            'type', 'value', 'min_order_amount', 'max_discount',
-            'usage_limit', 'start_date', 'expiry_date', 'status'
-        ]);
-
-        // Handle code separately to apply strtoupper
-        if ($request->has('code')) {
-            $updateData['code'] = strtoupper($request->code);
-        }
-
-        // Update the coupon
-        $coupon->update($updateData);
-
+    if (!$coupon) {
         return response()->json([
-            'success' => true,
-            'message' => 'Coupon updated successfully',
-            'data' => $coupon
-        ], 200);
+            'success' => false,
+            'message' => 'Coupon not found'
+        ], 404);
     }
 
-    // DELETE /vendor/coupons/{id}
-    public function destroy($id)
-    {
-        $coupon = Coupon::find($id);
+    $user = Auth::user();
 
-        // Check if coupon exists
-        if (!$coupon) {
+    // ✅ Admin bypass
+    if (!isset($user->is_admin) || !$user->is_admin) {
+        if ($coupon->vendor_id !== $user->vendor_id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Coupon not found'
-            ], 404);
+                'message' => 'Unauthorized to update this coupon'
+            ], 403);
         }
+    }
 
-        // Ownership check
-        $user = Auth::user();
-        // if ($coupon->vendor_id !== $user->vendor_id) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'Unauthorized to delete this coupon'
-        //     ], 403);
-        // }
+    $request->validate([
+        'code' => 'sometimes|string|unique:coupons,code,' . $id,
+        'type' => 'sometimes|in:fixed,percent',
+        'value' => 'sometimes|numeric|min:0',
+        'min_order_amount' => 'nullable|numeric|min:0',
+        'max_discount' => 'nullable|numeric|min:0',
+        'usage_limit' => 'nullable|integer|min:1',
+        'start_date' => 'sometimes|date',
+        'expiry_date' => 'sometimes|date|after:start_date',
+        'status' => 'sometimes|boolean'
+    ]);
 
-        // Optional: Check if coupon has been used
-        if ($coupon->used_count > 0) {
-            // Option 1: Soft delete or just disable instead of hard delete
-            // $coupon->update(['status' => false]);
-            
-            // Option 2: Allow delete anyway
-            // Option 3: Prevent delete with message
+    // ✅ Percentage validation
+    if ($request->has('type') && $request->type === 'percent') {
+        $value = $request->value ?? $coupon->value;
+
+        if ($value > 100) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cannot delete coupon that has already been used. You can disable it instead.'
+                'message' => 'Percentage cannot exceed 100'
             ], 422);
         }
-
-        // Delete the coupon
-        $coupon->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Coupon deleted successfully'
-        ], 200);
     }
+
+    $data = $request->only([
+        'type',
+        'value',
+        'min_order_amount',
+        'max_discount',
+        'usage_limit',
+        'start_date',
+        'expiry_date',
+        'status'
+    ]);
+
+    // Handle code uppercase
+    if ($request->has('code')) {
+        $data['code'] = strtoupper($request->code);
+    }
+
+    $coupon->update($data);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Coupon updated successfully',
+        'data' => $coupon
+    ]);
+}
+    // DELETE /vendor/coupons/{id}
+public function destroy($id)
+{
+    $coupon = Coupon::find($id);
+
+    if (!$coupon) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Coupon not found'
+        ], 404);
+    }
+
+    $user = Auth::user();
+
+    // ✅ Admin bypass
+    if (!isset($user->is_admin) || !$user->is_admin) {
+        // Vendor ownership check
+        if ($coupon->vendor_id !== $user->vendor_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized to delete this coupon'
+            ], 403);
+        }
+    }
+
+    // Optional: Prevent deleting used coupons
+    if ($coupon->used_count > 0) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Coupon already used. Disable instead of deleting.'
+        ], 422);
+    }
+
+    $coupon->delete();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Coupon deleted successfully'
+    ]);
+}
 
     // Optional: Get single coupon
     public function show($id)
@@ -195,4 +198,6 @@ class VendorCouponController extends Controller
             'data' => $coupons
         ]);
     }
+
+    
 }
