@@ -32,6 +32,7 @@ use App\Http\Controllers\API\Vendor\VendorRegisterController;
 use App\Http\Controllers\API\Vendor\VendorDocumentController;
 use App\Http\Controllers\API\Vendor\VendorOrderController;
 use App\Http\Controllers\API\Vendor\ProductQuestionController;
+use App\Http\Controllers\API\User\CouponController;
 
 
 use App\Http\Controllers\API\User\PaymentController;
@@ -45,8 +46,13 @@ Route::get('addresses', [AddressController::class, 'getAddresses']);
 Route::get('carts', [CartController::class, 'getCarts']);
 Route::post('/cart/add', [CartController::class, 'addToCart']);
 Route::get('/cart', [CartController::class, 'getCart']);
+Route::put('/cart/{id}', [CartController::class, 'updateCartItem']);
+Route::delete('/cart-item/{id}', [CartController::class, 'deleteCartItem']);
+Route::delete('/cart/clear', [CartController::class, 'clearCart']);
+
     
 Route::get('wishlists', [WishlistController::class, 'getWishlists']);
+
 
 
 Route::middleware('auth:sanctum')->group(function(){
@@ -60,6 +66,8 @@ Route::middleware('auth:sanctum')->group(function(){
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/address', [AddressController::class, 'getAddress']);
     Route::post('/address', [AddressController::class, 'store']);
+    Route::delete('/address/{id}', [AddressController::class, 'deleteAddress']);
+    Route::put('/address/{id}', [AddressController::class, 'updateAddress']);
 });
     
 Route::get('/shipping/methods', [CheckoutController::class,'shippingMethods']);
@@ -80,12 +88,11 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('wishlist', [WishlistController::class, 'getWishlist']);
     Route::post('/wishlist', [WishlistController::class, 'store']);
+    Route::delete('wishlist/{id}', [WishlistController::class, 'remove']);
 });
 
 Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
-
-
 
 
 Route::prefix('categories')->group(function () {
@@ -110,7 +117,6 @@ Route::prefix('products')->group(function () {
     // Related
     Route::get('/{id}/related', [ProductController::class, 'related']);
 
-
     // Product detail LAST
     Route::get('/{id}/images',[ProductController::class,'images']);
     Route::get('/{id}/reviews',[ProductController::class,'reviews']);
@@ -127,6 +133,14 @@ Route::get('/{slug}/products',[VendorStoreController::class,'products']);
 Route::get('/{slug}/reviews',[VendorStoreController::class,'reviews']);
 
 });
+
+
+Route::post('/vendor/coupons',[VendorCouponController::class,'store']);
+Route::put('/vendor/coupons/{id}',[VendorCouponController::class,'update']);
+Route::delete('/vendor/coupons/{id}',[VendorCouponController::class,'destroy']);
+
+//Coupon(User level)
+Route::post('/coupon/validate',[CouponController::class,'validate']);
 
 Route::middleware('auth:sanctum')->prefix('orders')->group(function(){
 
@@ -168,8 +182,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
-
-
 Route::middleware('auth:sanctum')->group(function(){
 
 Route::get('/vendor/dashboard',[VendorDashboardController::class,'dashboard']);
@@ -193,10 +205,12 @@ Route::post('/admin/commissions',[AdminCommissionController::class,'store']);
 Route::post('/admin/banners',[AdminBannerController::class,'store']);
 Route::post('/admin/roles',[AdminRoleController::class,'store']);
 Route::post('/admin/permissions',[AdminPermissionController::class,'store']);
+
+
 Route::post('/vendor/products',[VendorProductController::class,'store']);
 Route::post('/vendor/products/{id}/images',[ProductImageController::class,'store']);
 Route::post('/vendor/products/{id}/variants',[VendorVariantController::class,'store']);
-Route::post('/vendor/coupons',[VendorCouponController::class,'store']);
+
 Route::post('/vendor/wallet/withdraw',[VendorWalletController::class,'withdraw']);
 Route::post('/vendor/register',[VendorRegisterController::class,'register']);
 Route::post('/vendor/documents',[VendorDocumentController::class,'store']);
@@ -206,12 +220,21 @@ Route::post('/products/{id}/questions', [ProductQuestionController::class, 'stor
 Route::get('/products/{id}/questions', [ProductQuestionController::class, 'index']);
 Route::middleware('auth:sanctum')->delete('/profile/avatar', [ProfileController::class, 'deleteAvatar']);
 Route::middleware('auth:sanctum')->delete('/addresses/{id}', [AddressController::class, 'deleteAddress']);
-Route::middleware(['auth:sanctum', 'is_admin'])
+// Route::middleware(['auth:sanctum', 'is_admin'])
+//     ->delete('/admin/categories/{id}', [AdminCategoryController::class, 'deleteCategory']);
+// Route::middleware(['auth:sanctum', 'is_admin'])
+//     ->delete('/admin/subcategories/{id}', [AdminCategoryController::class, 'deleteSubcategory']);
+Route::middleware(['auth:sanctum'])
     ->delete('/admin/categories/{id}', [AdminCategoryController::class, 'deleteCategory']);
-Route::middleware(['auth:sanctum', 'is_admin'])
+Route::middleware(['auth:sanctum'])
     ->delete('/admin/subcategories/{id}', [AdminCategoryController::class, 'deleteSubcategory']);
-Route::middleware('auth:sanctum')
-    ->delete('/vendor/products/images/{id}', [ProductImageController::class, 'deleteProductImage']);
+Route::middleware(['auth:sanctum'])
+    ->put('/admin/categories/{id}', [AdminCategoryController::class, 'updateCategory']);
+Route::middleware(['auth:sanctum'])
+    ->put('/admin/subcategories/{id}', [AdminCategoryController::class, 'updateSubcategory']);
+
+
+Route::delete('/vendor/products/images/{id}', [ProductImageController::class, 'deleteProductImage']);
 Route::middleware(['auth:sanctum', 'is_admin'])
     ->delete('/admin/attributes/{id}', [AdminAttributeController::class, 'deleteAttribute']);
 Route::middleware(['auth:sanctum', 'is_admin'])
