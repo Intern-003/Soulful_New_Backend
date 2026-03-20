@@ -23,12 +23,10 @@ class RoleMiddleware
 
         $roles = explode('|', $roles);
 
-        // Check role
-        if (!in_array($user->role->name, $roles)) {
+        if (!in_array($user->role, $roles)) {
             return response()->json(['message' => 'Access denied'], 403);
         }
-
-//     if ($user->role->name == 'vendor' && $user->vendor->status != 'approved') {
+        //     if ($user->role->name == 'vendor' && $user->vendor->status != 'approved') {
 //     return response()->json(['message' => 'Vendor not approved yet'], 403);
 // }
 

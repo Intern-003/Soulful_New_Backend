@@ -35,8 +35,8 @@ use App\Http\Controllers\API\Vendor\ProductQuestionController;
 use App\Http\Controllers\API\User\CouponController;
 use App\Http\Controllers\API\User\ReviewController;
 use App\Http\Controllers\API\Admin\AdminWithdrawController;
-
-
+use App\Http\Controllers\API\Admin\AdminSupportController;
+use App\Http\Controllers\API\User\SupportController;
 use App\Http\Controllers\API\User\PaymentController;
 
 Route::post('auth/register', [AuthController::class, 'register']);
@@ -141,8 +141,16 @@ Route::post('/vendor/coupons',[VendorCouponController::class,'store']);
 Route::put('/vendor/coupons/{id}',[VendorCouponController::class,'update']);
 Route::delete('/vendor/coupons/{id}',[VendorCouponController::class,'destroy']);
 
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/coupon/apply',[CouponController::class,'applyCoupon']);
+Route::post('/coupon/remove',[CouponController::class,'removeCoupon']);
+
+});
 //Coupon(User level)
-Route::post('/coupon/validate',[CouponController::class,'validate']);
+Route::get('/coupon/available',[CouponController::class,'availableCoupons']);
+Route::post('/coupon/validate',[CouponController::class,'validateCoupon']);
+
 
 Route::middleware('auth:sanctum')->prefix('orders')->group(function(){
 
@@ -281,3 +289,16 @@ Route::middleware('auth:sanctum')
     ->put('/admin/roles/{id}', [AdminRoleController::class, 'updateRole']);    
 Route::middleware('auth:sanctum')
     ->put('/admin/permissions/{id}', [AdminPermissionController::class, 'updatePermission']);    
+    Route::prefix('support')->middleware('auth:sanctum')->group(function() {
+    Route::get('/tickets', [SupportController::class, 'index']); // list all tickets
+    Route::post('/tickets', [SupportController::class, 'store']); // view ticket
+    Route::get('/tickets/{id}', [SupportController::class, 'show']); // admin reply
+    Route::post('/tickets/{id}/reply', [SupportController::class, 'reply']); // change status
+});
+
+Route::prefix('admin/support')->middleware(['auth:sanctum', 'role:admin'])->group(function() {
+    Route::get('/', [AdminSupportController::class, 'index']); // list all tickets
+    Route::get('/{id}', [AdminSupportController::class, 'show']); // view ticket
+    Route::post('/{id}/reply', [AdminSupportController::class, 'reply']); // admin reply
+    Route::patch('/{id}/status', [AdminSupportController::class, 'updateStatus']); // change status
+});

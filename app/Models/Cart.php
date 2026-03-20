@@ -8,7 +8,8 @@ class Cart extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id','guest_token'];
+    protected $fillable = ['user_id','guest_token', 'coupon_id',
+        'discount_amount',];
 
     public function user() {
         return $this->belongsTo(User::class);
@@ -17,4 +18,8 @@ class Cart extends Model
     public function items() {
         return $this->hasMany(CartItem::class);
     }
+
+    public function coupon() {
+    return $this->belongsTo(Coupon::class);
+}
 }
