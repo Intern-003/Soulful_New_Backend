@@ -16,7 +16,7 @@ class CartController extends Controller
      */
     public function getCart(Request $request)
     {
-        $user = $request->user();
+     $user = Auth::guard('sanctum')->user();;
         $guestToken = $request->header('Guest-Token');
 
         if (!$user && !$guestToken) {
@@ -76,9 +76,9 @@ class CartController extends Controller
             // Merge guest cart if guest token exists
             if ($guestToken) {
                 $this->mergeGuestCart($guestToken, $cart);
-                 $cart->user_id = $user->id;
-        $cart->guest_token = null;
-        $cart->touch(); // updates updated_at
+                $cart->user_id = $user->id;
+                $cart->guest_token = null;
+                $cart->touch(); // updates updated_at
             }
 
             $guestToken = null; // remove guest token in response
@@ -175,5 +175,106 @@ class CartController extends Controller
             'shipping' => $shipping,
             'total' => $subtotal + $shipping
         ];
+    }
+
+    public function clearCart(Request $request)
+    {
+        //dd("called");
+        //$user = $request->user();
+        $user = Auth::guard('sanctum')->user();
+        //dd($user);
+        $guestToken = $request->header('Guest-Token');
+
+        $cart = Cart::when($user, fn($q) => $q->where('user_id', $user->id))
+            ->when(!$user && $guestToken, fn($q) => $q->where('guest_token', $guestToken))
+            ->first();
+
+        if (!$cart) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cart is already empty'
+            ]);
+        }
+
+        $cart->items()->delete();
+        $cart->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cart cleared'
+        ]);
+    }
+    public function deleteCartItem(Request $request, $id)
+    {
+        $user = Auth::guard('sanctum')->user();;
+        $guestToken = $request->header('Guest-Token');
+
+        $cartItem = CartItem::where('id', $id)
+            ->whereHas('cart', function ($q) use ($user, $guestToken) {
+                if ($user) {
+                    $q->where('user_id', $user->id);
+                } elseif ($guestToken) {
+                    $q->where('guest_token', $guestToken);
+                }
+            })
+            ->first();
+
+        if (!$cartItem) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cart item not found'
+            ], 404);
+        }
+
+        $cart = $cartItem->cart;
+
+        $cartItem->delete();
+
+        $totals = $this->calculateTotals($cart->fresh('items.product'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cart item deleted',
+            'totals' => $totals
+        ]);
+    }
+    public function updateCartItem(Request $request, $id)
+    {
+        $request->validate([
+            'quantity' => 'required|integer|min:1'
+        ]);
+
+        $user = Auth::guard('sanctum')->user();
+        $guestToken = $request->header('Guest-Token');
+
+        // Find cart item for user or guest
+        $cartItem = CartItem::where('id', $id)
+            ->whereHas('cart', function ($q) use ($user, $guestToken) {
+                if ($user) {
+                    $q->where('user_id', $user->id);
+                } elseif ($guestToken) {
+                    $q->where('guest_token', $guestToken);
+                }
+            })
+            ->first();
+
+        if (!$cartItem) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cart item not found'
+            ], 404);
+        }
+
+        $cartItem->quantity = $request->quantity;
+        $cartItem->save();
+
+        $totals = $this->calculateTotals($cartItem->cart->fresh('items.product'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cart item updated',
+            'data' => $cartItem,
+            'totals' => $totals
+        ]);
     }
 }

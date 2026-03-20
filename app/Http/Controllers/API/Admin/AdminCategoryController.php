@@ -151,4 +151,109 @@ public function deleteSubcategory($id)
         'message' => 'Subcategory deleted successfully'
     ]);
 }
+
+public function updateCategory(Request $request, $id)
+{
+    $category = Category::find($id);
+
+    if (!$category) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Category not found'
+        ], 404);
+    }
+
+    $request->validate([
+        'name' => 'sometimes|string|max:255',
+        'parent_id' => 'nullable|exists:categories,id',
+        'description' => 'nullable|string',
+        'image' => 'nullable|string',
+        'position' => 'nullable|integer',
+        'status' => 'nullable|boolean'
+    ]);
+
+    if ($request->has('name') && $request->name != $category->name) {
+        $slug = Str::slug($request->name);
+
+        // Ensure slug uniqueness
+        $count = Category::where('slug','LIKE',$slug.'%')
+            ->where('id','!=',$id)
+            ->count();
+
+        if ($count > 0) {
+            $slug = $slug.'-'.($count+1);
+        }
+
+        $category->slug = $slug;
+        $category->name = $request->name;
+    }
+
+    if ($request->has('parent_id')) $category->parent_id = $request->parent_id;
+    if ($request->has('description')) $category->description = $request->description;
+    if ($request->has('image')) $category->image = $request->image;
+    if ($request->has('position')) $category->position = $request->position;
+    if ($request->has('status')) $category->status = $request->status;
+
+    $category->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Category updated successfully',
+        'data' => $category
+    ]);
+}
+    public function updateSubcategory(Request $request, $id)
+{
+    $subcategory = Category::find($id);
+
+    if (!$subcategory) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Subcategory not found'
+        ], 404);
+    }
+
+    // Ensure it's a subcategory
+    if (is_null($subcategory->parent_id)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'This is not a subcategory'
+        ], 400);
+    }
+
+    $request->validate([
+        'name' => 'sometimes|string|max:255',
+        'parent_id' => 'sometimes|exists:categories,id',
+        'description' => 'nullable|string',
+        'status' => 'nullable|boolean'
+    ]);
+
+    if ($request->has('name') && $request->name != $subcategory->name) {
+        $slug = Str::slug($request->name);
+
+        $count = Category::where('slug','LIKE',$slug.'%')
+            ->where('id','!=',$id)
+            ->count();
+
+        if ($count > 0) {
+            $slug = $slug.'-'.($count+1);
+        }
+
+        $subcategory->slug = $slug;
+        $subcategory->name = $request->name;
+    }
+
+    if ($request->has('parent_id')) $subcategory->parent_id = $request->parent_id;
+    if ($request->has('description')) $subcategory->description = $request->description;
+    if ($request->has('status')) $subcategory->status = $request->status;
+
+    $subcategory->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Subcategory updated successfully',
+        'data' => $subcategory
+    ]);
+}
+
 }

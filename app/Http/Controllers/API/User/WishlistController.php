@@ -95,4 +95,34 @@ public function store(Request $request)
     ], 201);
 }
 
+public function remove(Request $request, $id)
+{
+    $user = $request->user();
+
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'User not authenticated'
+        ], 401);
+    }
+
+    // Find wishlist item for this user
+    $wishlistItem = Wishlist::where('id', $id)
+        ->where('user_id', $user->id)
+        ->first();
+
+    if (!$wishlistItem) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Wishlist item not found'
+        ], 404);
+    }
+
+    $wishlistItem->delete();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Wishlist item removed successfully'
+    ]);
+}
 }
