@@ -43,7 +43,7 @@ class AdminAttributeValueController extends Controller
         ],201);
     }
 
-    public function deleteAttributeValue($id)
+public function deleteAttributeValue($id)
 {
     $value = AttributeValue::find($id);
 
@@ -54,8 +54,11 @@ class AdminAttributeValueController extends Controller
         ], 404);
     }
 
-    // Optional: check if used in variants
-    if (\DB::table('product_variant_values')->where('attribute_value_id', $id)->exists()) {
+    // ✅ Correct table name
+    if (DB::table('product_variant_attributes')
+        ->where('attribute_value_id', $id)
+        ->exists()) {
+        
         return response()->json([
             'success' => false,
             'message' => 'Value is used in variants. Cannot delete.'
@@ -67,6 +70,44 @@ class AdminAttributeValueController extends Controller
     return response()->json([
         'success' => true,
         'message' => 'Attribute value deleted successfully'
+    ]);
+}
+
+public function updateAttributeValue(Request $request, $id)
+{
+    $value = AttributeValue::find($id);
+
+    if (!$value) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Attribute value not found'
+        ], 404);
+    }
+
+    $request->validate([
+        'value' => 'required|string|max:255'
+    ]);
+
+    $slug = Str::slug($request->value);
+
+    // Ensure unique slug
+    $count = AttributeValue::where('slug', 'LIKE', $slug . '%')
+        ->where('id', '!=', $id)
+        ->count();
+
+    if ($count > 0) {
+        $slug = $slug . '-' . ($count + 1);
+    }
+
+    $value->update([
+        'value' => $request->value,
+        'slug' => $slug
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Attribute value updated successfully',
+        'data' => $value
     ]);
 }
 

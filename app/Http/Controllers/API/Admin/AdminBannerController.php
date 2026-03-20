@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Banner;
+use Illuminate\Support\Facades\Storage;
 
 class AdminBannerController extends Controller
 {
@@ -36,5 +37,86 @@ class AdminBannerController extends Controller
             'data' => $banner
         ],201);
     }
+
+    public function deleteBanner($id)
+{
+    $banner = Banner::find($id);
+
+    if (!$banner) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Banner not found'
+        ], 404);
+    }
+
+    // ✅ Delete image from storage
+    if ($banner->image) {
+        $path = str_replace(url('/storage/'), 'public/', $banner->image);
+
+        if (Storage::exists($path)) {
+            Storage::delete($path);
+        }
+    }
+
+    $banner->delete();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Banner deleted successfully'
+    ]);
+}   
+
+public function updateBanner(Request $request, $id)
+{
+    $banner = Banner::find($id);
+
+    if (!$banner) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Banner not found'
+        ], 404);
+    }
+
+    $request->validate([
+        'title' => 'sometimes|string|max:255',
+        'subtitle' => 'nullable|string|max:255',
+        'image' => 'nullable|string',
+        'link' => 'nullable|string',
+        'position' => 'nullable|integer',
+        'status' => 'sometimes|boolean'
+    ]);
+
+    $data = $request->only([
+        'title',
+        'subtitle',
+        'link',
+        'position',
+        'status'
+    ]);
+
+    // ✅ Handle image update
+    if ($request->has('image')) {
+
+        // delete old image
+        if ($banner->image) {
+            $oldPath = str_replace(url('/storage/'), 'public/', $banner->image);
+
+            if (Storage::exists($oldPath)) {
+                Storage::delete($oldPath);
+            }
+        }
+
+        $data['image'] = $request->image;
+    }
+
+    $banner->update($data);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Banner updated successfully',
+        'data' => $banner
+    ]);
+}
+
 
 }

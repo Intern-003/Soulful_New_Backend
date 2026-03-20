@@ -33,6 +33,8 @@ use App\Http\Controllers\API\Vendor\VendorDocumentController;
 use App\Http\Controllers\API\Vendor\VendorOrderController;
 use App\Http\Controllers\API\Vendor\ProductQuestionController;
 use App\Http\Controllers\API\User\CouponController;
+use App\Http\Controllers\API\User\ReviewController;
+use App\Http\Controllers\API\Admin\AdminWithdrawController;
 use App\Http\Controllers\API\Admin\AdminSupportController;
 use App\Http\Controllers\API\User\SupportController;
 use App\Http\Controllers\API\User\PaymentController;
@@ -243,12 +245,51 @@ Route::middleware(['auth:sanctum'])
 
 
 Route::delete('/vendor/products/images/{id}', [ProductImageController::class, 'deleteProductImage']);
-Route::middleware(['auth:sanctum', 'is_admin'])
+Route::middleware(['auth:sanctum'])
     ->delete('/admin/attributes/{id}', [AdminAttributeController::class, 'deleteAttribute']);
-Route::middleware(['auth:sanctum', 'is_admin'])
+Route::middleware(['auth:sanctum'])
     ->delete('/admin/attribute-values/{id}', [AdminAttributeValueController::class, 'deleteAttributeValue']);
-    
-Route::prefix('support')->middleware('auth:sanctum')->group(function() {
+Route::middleware('auth:sanctum')
+    ->delete('/vendor/product-variants/{id}', [VendorVariantController::class, 'deleteVariant']);
+Route::middleware('auth:sanctum')
+    ->delete('/vendor/products/{id}', [VendorProductController::class, 'deleteProduct']);
+Route::middleware('auth:sanctum')
+    ->delete('/vendor/coupons/{id}', [VendorCouponController::class, 'destroy']);
+Route::middleware('auth:sanctum')
+    ->delete('/reviews/{id}', [ReviewController::class, 'deleteReview']);
+Route::middleware('auth:sanctum')
+    ->delete('/admin/banners/{id}', [AdminBannerController::class, 'deleteBanner']);
+Route::middleware('auth:sanctum')
+    ->delete('/admin/roles/{id}', [AdminRoleController::class, 'deleteRole']);
+Route::middleware('auth:sanctum')
+    ->delete('/admin/permissions/{id}', [AdminPermissionController::class, 'deletePermission']);
+Route::middleware('auth:sanctum')
+    ->put('/admin/attributes/{id}', [AdminAttributeController::class, 'updateAttribute']);
+Route::middleware('auth:sanctum')
+    ->put('/admin/attribute-values/{id}', [AdminAttributeValueController::class, 'updateAttributeValue']);
+Route::middleware('auth:sanctum')
+    ->put('/vendor/product-variants/{id}', [VendorVariantController::class, 'updateVariant']); 
+Route::middleware('auth:sanctum')
+    ->put('/vendor/products/{id}/stock', [VendorProductController::class, 'updateStock']);    
+Route::middleware('auth:sanctum')
+    ->put('/vendor/products/{id}', [VendorProductController::class, 'updateProduct']);  
+Route::middleware('auth:sanctum')
+    ->put('/vendor/coupons/{id}', [VendorCouponController::class, 'update']);   
+Route::middleware('auth:sanctum')
+    ->put('/reviews/{id}', [ReviewController::class, 'updateReview']);
+Route::middleware('auth:sanctum')->group(function () {
+    Route::put('/admin/withdraw-requests/{id}/approve', [AdminWithdrawController::class, 'approve']);
+    Route::put('/admin/withdraw-requests/{id}/reject', [AdminWithdrawController::class, 'reject']);
+});
+Route::middleware('auth:sanctum')
+    ->put('/admin/vendors/{id}/commission', [AdminCommissionController::class, 'updateVendorCommission']);
+Route::middleware('auth:sanctum')
+    ->put('/admin/banners/{id}', [AdminBannerController::class, 'updateBanner']);    
+Route::middleware('auth:sanctum')
+    ->put('/admin/roles/{id}', [AdminRoleController::class, 'updateRole']);    
+Route::middleware('auth:sanctum')
+    ->put('/admin/permissions/{id}', [AdminPermissionController::class, 'updatePermission']);    
+    Route::prefix('support')->middleware('auth:sanctum')->group(function() {
     Route::get('/tickets', [SupportController::class, 'index']); // list all tickets
     Route::post('/tickets', [SupportController::class, 'store']); // view ticket
     Route::get('/tickets/{id}', [SupportController::class, 'show']); // admin reply
