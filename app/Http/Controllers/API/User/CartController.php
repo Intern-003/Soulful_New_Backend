@@ -16,7 +16,8 @@ class CartController extends Controller
      */
     public function getCart(Request $request)
     {
-     $user = Auth::guard('sanctum')->user();;
+        $user = Auth::guard('sanctum')->user();
+        
         $guestToken = $request->header('Guest-Token');
 
         if (!$user && !$guestToken) {
@@ -60,8 +61,6 @@ class CartController extends Controller
             'variant_id' => 'nullable|exists:product_variants,id',
             'quantity' => 'required|integer|min:1'
         ]);
-
-
 
 
         $user = Auth::guard('sanctum')->user(); // manually check for authenticated user
@@ -115,8 +114,12 @@ class CartController extends Controller
             ]);
         }
 
-        $totals = $this->calculateTotals($cart->fresh('items.product'));
+        $cart->update([
+            'coupon_id' => null,
+            'discount_amount' => 0
+        ]);
 
+        $totals = $this->calculateTotals($cart->fresh('items.product'));
         return response()->json([
             'success' => true,
             'message' => 'Product added to cart',
@@ -160,6 +163,11 @@ class CartController extends Controller
         // Delete guest cart
         $guestCart->items()->delete();
         $guestCart->delete();
+
+        $userCart->update([
+            'coupon_id' => null,
+            'discount_amount' => 0
+        ]);
     }
 
     /**
@@ -167,13 +175,16 @@ class CartController extends Controller
      */
     protected function calculateTotals(Cart $cart)
     {
-        $subtotal = $cart->items->sum(fn($item) => $item->product->price * $item->quantity);
+        $subtotal = $cart->items->sum(fn($item) => $item->price * $item->quantity);
         $shipping = 50;
+
+        $discount = $cart->discount_amount ?? 0;
 
         return [
             'subtotal' => $subtotal,
             'shipping' => $shipping,
-            'total' => $subtotal + $shipping
+            'discount' => $discount,
+            'total' => $subtotal + $shipping - $discount
         ];
     }
 
@@ -206,7 +217,8 @@ class CartController extends Controller
     }
     public function deleteCartItem(Request $request, $id)
     {
-        $user = Auth::guard('sanctum')->user();;
+        $user = Auth::guard('sanctum')->user();
+        ;
         $guestToken = $request->header('Guest-Token');
 
         $cartItem = CartItem::where('id', $id)
@@ -230,8 +242,12 @@ class CartController extends Controller
 
         $cartItem->delete();
 
-        $totals = $this->calculateTotals($cart->fresh('items.product'));
+        $cart->update([
+            'coupon_id' => null,
+            'discount_amount' => 0
+        ]);
 
+        $totals = $this->calculateTotals($cart->fresh('items.product'));
         return response()->json([
             'success' => true,
             'message' => 'Cart item deleted',
@@ -267,9 +283,13 @@ class CartController extends Controller
 
         $cartItem->quantity = $request->quantity;
         $cartItem->save();
+        $cart = $cartItem->cart;
+        $cart->update([
+            'coupon_id' => null,
+            'discount_amount' => 0
+        ]);
 
-        $totals = $this->calculateTotals($cartItem->cart->fresh('items.product'));
-
+        $totals = $this->calculateTotals($cart->fresh('items.product'));
         return response()->json([
             'success' => true,
             'message' => 'Cart item updated',
