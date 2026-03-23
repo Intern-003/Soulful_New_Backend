@@ -5,11 +5,78 @@ namespace App\Http\Controllers\API\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Coupon;
-use App\Models\Cart; // Assuming you have a Cart model
+use App\Models\Cart;
 use Carbon\Carbon;
 
 class CouponController extends Controller
 {
+    /**
+     * Validate coupon logic (reusable)
+     */
+    public function validateCouponLogic($coupon, $cartTotal)
+    {
+        if (!$coupon || !$coupon->status) {
+            return ['success' => false, 'message' => 'Invalid coupon'];
+        }
+
+        $now = Carbon::now();
+
+        if ($coupon->start_date > $now) {
+            return ['success' => false, 'message' => 'Coupon not started'];
+        }
+
+        if ($coupon->expiry_date < $now) {
+            return ['success' => false, 'message' => 'Coupon expired'];
+        }
+
+        if ($coupon->usage_limit && $coupon->used_count >= $coupon->usage_limit) {
+            return ['success' => false, 'message' => 'Coupon usage limit reached'];
+        }
+
+        if ($coupon->min_order_amount && $cartTotal < $coupon->min_order_amount) {
+            return ['success' => false, 'message' => 'Minimum order not met'];
+        }
+
+        if ($coupon->vendor && $coupon->vendor->status !== 'active') {
+            return ['success' => false, 'message' => 'This coupon is currently unavailable'];
+        }
+
+        return ['success' => true];
+    }
+
+    /**
+     * Calculate discount (reusable)
+     * Now supports both 'percent' and 'percentage' types
+     */
+    public function calculateDiscount($coupon, $cartTotal)
+    {
+        // Check if it's a percentage type (supports both 'percent' and 'percentage')
+        $isPercentage = in_array($coupon->type, ['percent', 'percentage']);
+        
+        if ($isPercentage) {
+            $discount = ($cartTotal * $coupon->value) / 100;
+
+            if ($coupon->max_discount && $discount > $coupon->max_discount) {
+                $discount = $coupon->max_discount;
+            }
+        } else { // fixed
+            $discount = $coupon->value;
+        }
+
+        return min($discount, $cartTotal);
+    }
+
+    /**
+     * Get coupon type display name
+     */
+    private function getCouponTypeDisplay($type)
+    {
+        if (in_array($type, ['percent', 'percentage'])) {
+            return 'percentage';
+        }
+        return 'fixed';
+    }
+
     /**
      * Validate coupon without applying
      * POST /coupon/validate
@@ -21,11 +88,8 @@ class CouponController extends Controller
             'cart_total' => 'required|numeric|min:0'
         ]);
 
-        $coupon = Coupon::where('code', strtoupper($request->code))
-            ->where('status', true)
-            ->first();
+        $coupon = Coupon::where('code', strtoupper($request->code))->first();
 
-        // Check if coupon exists
         if (!$coupon) {
             return response()->json([
                 'success' => false,
@@ -33,54 +97,11 @@ class CouponController extends Controller
             ], 404);
         }
 
-        // Check vendor status (optional - if vendor needs to be active)
-        if ($coupon->vendor && $coupon->vendor->status !== 'active') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This coupon is currently unavailable'
-            ], 422);
+        $validation = $this->validateCouponLogic($coupon, $request->cart_total);
+        if (!$validation['success']) {
+            return response()->json($validation, 422);
         }
 
-        // Check date validity
-        $now = Carbon::now();
-        $startDate = Carbon::parse($coupon->start_date);
-        $expiryDate = Carbon::parse($coupon->expiry_date);
-
-        if ($now->lt($startDate)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This coupon is not active yet',
-                'available_from' => $startDate->format('Y-m-d')
-            ], 422);
-        }
-
-        if ($now->gt($expiryDate)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This coupon has expired',
-                'expired_on' => $expiryDate->format('Y-m-d')
-            ], 422);
-        }
-
-        // Check usage limit
-        if ($coupon->usage_limit && $coupon->used_count >= $coupon->usage_limit) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This coupon has reached its usage limit'
-            ], 422);
-        }
-
-        // Check minimum order amount
-        if ($coupon->min_order_amount && $request->cart_total < $coupon->min_order_amount) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Minimum order amount of ' . $coupon->min_order_amount . ' required',
-                'required_amount' => $coupon->min_order_amount,
-                'current_amount' => $request->cart_total
-            ], 422);
-        }
-
-        // Calculate discount amount
         $discountAmount = $this->calculateDiscount($coupon, $request->cart_total);
 
         return response()->json([
@@ -90,7 +111,7 @@ class CouponController extends Controller
                 'coupon' => [
                     'id' => $coupon->id,
                     'code' => $coupon->code,
-                    'type' => $coupon->type,
+                    'type' => $this->getCouponTypeDisplay($coupon->type), // Normalize display
                     'value' => $coupon->value,
                     'min_order_amount' => $coupon->min_order_amount,
                     'max_discount' => $coupon->max_discount
@@ -115,65 +136,45 @@ class CouponController extends Controller
     {
         $request->validate([
             'code' => 'required|string',
-            'cart_id' => 'required|exists:carts,id' // Assuming you have cart system
+            'cart_id' => 'required|exists:carts,id'
         ]);
 
         $user = $request->user();
-        $coupon = Coupon::where('code', strtoupper($request->code))
-            ->where('status', true)
-            ->first();
 
-        if (!$coupon) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid coupon code'
-            ], 404);
-        }
-
-        // Find user's cart
-        $cart = Cart::where('id', $request->cart_id)
+        $cart = Cart::with('items.product')
+            ->where('id', $request->cart_id)
             ->where('user_id', $user->id)
             ->first();
 
         if (!$cart) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cart not found'
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Cart not found'], 404);
         }
 
-        // Re-validate coupon with cart total
-        $validationRequest = new Request([
-            'code' => $request->code,
-            'cart_total' => $cart->total_amount
-        ]);
+        $coupon = Coupon::where('code', strtoupper($request->code))->first();
 
-        $validation = $this->validateCoupon($validationRequest);
-        
-        if ($validation->getStatusCode() !== 200) {
-            return $validation;
+        if (!$coupon) {
+            return response()->json(['success' => false, 'message' => 'Invalid coupon code'], 404);
         }
 
-        $validationData = $validation->getData();
+        // Validate coupon logic
+        $subtotal = $cart->items->sum(fn($i) => $i->price * $i->quantity);
+        $validation = $this->validateCouponLogic($coupon, $subtotal);
 
-        // Apply coupon to cart
+        if (!$validation['success']) {
+            return response()->json($validation, 422);
+        }
+
+        $discount = $this->calculateDiscount($coupon, $subtotal);
+
         $cart->update([
             'coupon_id' => $coupon->id,
-            'discount_amount' => $validationData->data->discount->amount,
-            'final_amount' => $validationData->data->cart_total->after_discount
+            'discount_amount' => $discount
         ]);
-
-        // Increment used count (optional - or wait until order is placed)
-        // $coupon->increment('used_count');
 
         return response()->json([
             'success' => true,
-            'message' => 'Coupon applied successfully',
-            'data' => [
-                'cart' => $cart->load('items'),
-                'coupon' => $coupon,
-                'savings' => $validationData->data->discount->amount
-            ]
+            'message' => 'Coupon applied',
+            'discount' => $discount
         ]);
     }
 
@@ -183,51 +184,32 @@ class CouponController extends Controller
      */
     public function removeCoupon(Request $request)
     {
-        $request->validate([
-            'cart_id' => 'required|exists:carts,id'
-        ]);
+        $request->validate(['cart_id' => 'required|exists:carts,id']);
 
         $user = $request->user();
 
-        // Find user's cart
         $cart = Cart::where('id', $request->cart_id)
             ->where('user_id', $user->id)
             ->first();
 
         if (!$cart) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cart not found'
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Cart not found'], 404);
         }
 
-        // Check if coupon is applied
         if (!$cart->coupon_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No coupon applied to this cart'
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'No coupon applied to this cart'], 422);
         }
 
-        // Get coupon before removing
         $coupon = Coupon::find($cart->coupon_id);
 
-        // Remove coupon from cart
-        $cart->update([
-            'coupon_id' => null,
-            'discount_amount' => 0,
-            'final_amount' => $cart->total_amount
-        ]);
+        $cart->update(['coupon_id' => null, 'discount_amount' => 0]);
 
         return response()->json([
             'success' => true,
             'message' => 'Coupon removed successfully',
             'data' => [
                 'cart' => $cart->load('items'),
-                'removed_coupon' => $coupon ? [
-                    'id' => $coupon->id,
-                    'code' => $coupon->code
-                ] : null
+                'removed_coupon' => $coupon ? ['id' => $coupon->id, 'code' => $coupon->code] : null
             ]
         ]);
     }
@@ -238,45 +220,49 @@ class CouponController extends Controller
      */
     public function availableCoupons(Request $request)
     {
-        $request->validate([
-            'cart_total' => 'nullable|numeric|min:0'
-        ]);
+        $request->validate(['cart_total' => 'nullable|numeric|min:0']);
 
         $now = Carbon::now();
 
         $query = Coupon::where('status', true)
             ->where('start_date', '<=', $now)
             ->where('expiry_date', '>=', $now)
-            ->where(function($q) {
+            ->where(function ($q) {
                 $q->whereNull('usage_limit')
                   ->orWhereRaw('used_count < usage_limit');
+            })
+            ->where(function ($q) {
+                // Allow coupons with no vendor OR vendor is active
+                $q->whereNull('vendor_id')
+                  ->orWhereHas('vendor', function ($q) {
+                      $q->where('status', 'active');
+                  });
             });
 
-        // If cart total provided, filter by minimum order
         if ($request->cart_total) {
-            $query->where(function($q) use ($request) {
+            $query->where(function ($q) use ($request) {
                 $q->whereNull('min_order_amount')
                   ->orWhere('min_order_amount', '<=', $request->cart_total);
             });
         }
 
-        $coupons = $query->with('vendor:id,store_name')
+        $coupons = $query->with('vendor:id,store_name,status')
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function($coupon) use ($request) {
-                $discountAmount = $request->cart_total ? 
+            ->map(function ($coupon) use ($request) {
+                $discountAmount = $request->cart_total ?
                     $this->calculateDiscount($coupon, $request->cart_total) : null;
-                
+
                 return [
                     'id' => $coupon->id,
                     'code' => $coupon->code,
-                    'type' => $coupon->type,
+                    'type' => $this->getCouponTypeDisplay($coupon->type),
                     'value' => $coupon->value,
                     'description' => $this->getCouponDescription($coupon),
                     'min_order_amount' => $coupon->min_order_amount,
                     'max_discount' => $coupon->max_discount,
                     'expiry_date' => $coupon->expiry_date->format('Y-m-d'),
-                    'vendor' => $coupon->vendor ? $coupon->vendor->store_name : null,
+                    'vendor' => $coupon->vendor ? $coupon->vendor->store_name : 'Global',
                     'potential_discount' => $discountAmount ? [
                         'amount' => $discountAmount,
                         'formatted' => number_format($discountAmount, 2)
@@ -284,30 +270,7 @@ class CouponController extends Controller
                 ];
             });
 
-        return response()->json([
-            'success' => true,
-            'data' => $coupons
-        ]);
-    }
-
-    /**
-     * Calculate discount amount
-     */
-    private function calculateDiscount($coupon, $cartTotal)
-    {
-        if ($coupon->type === 'fixed') {
-            $discount = $coupon->value;
-        } else { // percent
-            $discount = ($cartTotal * $coupon->value) / 100;
-            
-            // Apply max discount limit if exists
-            if ($coupon->max_discount && $discount > $coupon->max_discount) {
-                $discount = $coupon->max_discount;
-            }
-        }
-
-        // Ensure discount doesn't exceed cart total
-        return min($discount, $cartTotal);
+        return response()->json(['success' => true, 'data' => $coupons]);
     }
 
     /**
@@ -315,17 +278,19 @@ class CouponController extends Controller
      */
     private function getCouponDescription($coupon)
     {
-        if ($coupon->type === 'fixed') {
-            $desc = '₹' . $coupon->value . ' OFF';
-        } else {
+        $isPercentage = in_array($coupon->type, ['percent', 'percentage']);
+        
+        if ($isPercentage) {
             $desc = $coupon->value . '% OFF';
+        } else {
+            $desc = '₹' . $coupon->value . ' OFF';
         }
 
         if ($coupon->min_order_amount) {
             $desc .= ' on min. purchase of ₹' . $coupon->min_order_amount;
         }
 
-        if ($coupon->max_discount && $coupon->type === 'percent') {
+        if ($coupon->max_discount && $isPercentage) {
             $desc .= ' (up to ₹' . $coupon->max_discount . ')';
         }
 
