@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Cart;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\OrderStatusHistory; // ✅ ADDED
 
 class OrderController extends Controller
 {
@@ -92,17 +93,32 @@ class OrderController extends Controller
 
 
     // GET /orders/{id}/invoice
-    public function invoice(Request $request, $id)
-    {
-        $order = Order::with(['items.product', 'address'])
-            ->where('user_id', $request->user()->id)
-            ->findOrFail($id);
+public function invoice(Request $request, $id)
+{
+    $order = Order::with([
+        'items.product',
+        'items.vendor',
+        'address'
+    ])
+    ->where('user_id', $request->user()->id)
+    ->findOrFail($id);
 
-        return response()->json([
-            'success' => true,
-            'invoice' => $order
-        ]);
-    }
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'order_number' => $order->order_number,
+            'date' => $order->created_at,
+            'customer' => $order->user->name ?? null,
+            'address' => $order->address,
+            'items' => $order->items,
+            'subtotal' => $order->subtotal,
+            'tax' => $order->tax,
+            'shipping' => $order->shipping_cost,
+            'total' => $order->total,
+            'status' => $order->order_status
+        ]
+    ]);
+}
 
     public function store(Request $request)
     {
@@ -135,14 +151,12 @@ class OrderController extends Controller
 
         DB::transaction(function () use ($cart, $user, $request, &$order) {
 
-            // Calculate totals
             $subtotal = $cart->items->sum(fn($item) => $item->product->price * $item->quantity);
             $shipping = 50;
             $tax = 0;
             $discount = 0;
             $total = $subtotal + $shipping + $tax - $discount;
 
-            // Create order
             $order = Order::create([
                 'user_id' => $user->id,
                 'order_number' => 'ORD-' . time() . rand(100, 999),
@@ -157,7 +171,13 @@ class OrderController extends Controller
                 'order_status' => 'placed'
             ]);
 
-            // Create order items + reduce stock
+            // ✅ ADD HISTORY
+            OrderStatusHistory::create([
+                'order_id' => $order->id,
+                'status' => 'placed',
+                'note' => 'Order placed successfully'
+            ]);
+
             foreach ($cart->items as $item) {
                 $product = Product::where('id', $item->product_id)
                     ->lockForUpdate()
@@ -171,34 +191,32 @@ class OrderController extends Controller
                     throw new \Exception("Insufficient stock for product: {$product->name}");
                 }
 
-                // Make sure product has a vendor_id
                 if (!$product->vendor_id) {
                     throw new \Exception("Product {$product->name} has no vendor assigned");
                 }
 
-                // Calculate item total
                 $itemTotal = $product->price * $item->quantity;
 
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'variant_id' => $item->variant_id,
-                    'vendor_id' => $product->vendor_id, // ADD THIS - was missing!
+                    'vendor_id' => $product->vendor_id,
                     'quantity' => $item->quantity,
                     'price' => $product->price,
-                    'total' => $itemTotal, // Add total if your schema has it
-                    'status' => 'pending' // Add status if your schema has it
+                    'total' => $itemTotal,
+                    'status' => 'pending'
                 ]);
 
                 $product->decrement('stock', $item->quantity);
             }
 
-            // Clear cart
             $cart->items()->delete();
         });
 
-        // Load relationships for response
-        $order->load('items.product', 'items.vendor', 'address');
+        if ($order) {
+            $order->load('items.product', 'items.vendor', 'address');
+        }
 
         return response()->json([
             'success' => true,
@@ -227,6 +245,13 @@ class OrderController extends Controller
 
         $order->update(['order_status' => 'cancelled']);
 
+        // ✅ ADD HISTORY
+        OrderStatusHistory::create([
+            'order_id' => $order->id,
+            'status' => 'cancelled',
+            'note' => 'Order cancelled by user'
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Order cancelled successfully'
@@ -246,6 +271,13 @@ class OrderController extends Controller
         }
 
         $order->update(['order_status' => 'return_requested']);
+
+        // ✅ ADD HISTORY
+        OrderStatusHistory::create([
+            'order_id' => $order->id,
+            'status' => 'return_requested',
+            'note' => 'Return requested by user'
+        ]);
 
         return response()->json([
             'success' => true,
@@ -267,10 +299,30 @@ class OrderController extends Controller
 
         $order->update(['order_status' => 'exchange_requested']);
 
+        // ✅ ADD HISTORY
+        OrderStatusHistory::create([
+            'order_id' => $order->id,
+            'status' => 'exchange_requested',
+            'note' => 'Exchange requested by user'
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Exchange request submitted'
         ]);
     }
+
+
+public function statusHistory(Request $request, $id)
+{
+    $order = Order::where('user_id', $request->user()->id)
+        ->with('statusHistory')
+        ->findOrFail($id);
+
+    return response()->json([
+        'success' => true,
+        'data' => $order->statusHistory
+    ]);
+}
 
 }

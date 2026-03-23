@@ -44,31 +44,59 @@ class VendorDashboardController extends Controller
 
 
 
-    // GET /vendor/dashboard/stats
+    // ✅ STATS API
     public function stats(Request $request)
     {
-        $vendor = Vendor::where('user_id',$request->user()->id)->first();
+        $vendor = $request->user()->vendor;
 
-        $orders = OrderItem::where('vendor_id',$vendor->id)->count();
+        if (!$vendor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vendor not found'
+            ], 404);
+        }
 
-        $pendingOrders = OrderItem::where('vendor_id',$vendor->id)
-                        ->where('status','pending')
-                        ->count();
+        $query = OrderItem::where('vendor_id', $vendor->id);
 
-        $completedOrders = OrderItem::where('vendor_id',$vendor->id)
-                        ->where('status','completed')
-                        ->count();
+        $totalRevenue = $query->sum('total');
+
+        $totalOrders = $query->distinct('order_id')->count('order_id');
+
+        $totalProducts = Product::where('vendor_id', $vendor->id)->count();
 
         return response()->json([
-            'success'=>true,
-            'data'=>[
-                'total_orders'=>$orders,
-                'pending_orders'=>$pendingOrders,
-                'completed_orders'=>$completedOrders
+            'success' => true,
+            'data' => [
+                'total_revenue' => $totalRevenue,
+                'total_orders' => $totalOrders,
+                'total_products' => $totalProducts
             ]
         ]);
     }
+   // ✅ REVENUE CHART API
+    public function revenueChart(Request $request)
+    {
+        $vendor = $request->user()->vendor;
 
+        if (!$vendor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Vendor not found'
+            ], 404);
+        }
+
+        // Group by date
+        $data = OrderItem::where('vendor_id', $vendor->id)
+            ->selectRaw('DATE(created_at) as date, SUM(total) as revenue')
+            ->groupBy('date')
+            ->orderBy('date', 'asc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ]);
+    }
 
 
     // GET /vendor/orders/summary
@@ -88,4 +116,6 @@ class VendorDashboardController extends Controller
         ]);
     }
 
+
+    
 }

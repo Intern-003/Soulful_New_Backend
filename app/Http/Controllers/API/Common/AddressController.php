@@ -135,5 +135,41 @@ class AddressController extends Controller
         'data' => $address
     ]);
 }
+public function setDefaultAddress(Request $request, $id)
+{
+    $user = $request->user();
 
+    // Find address
+    $address = Address::find($id);
+
+    if (!$address) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Address not found'
+        ], 404);
+    }
+
+    // Ownership check
+    if ($address->user_id !== $user->id) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 403);
+    }
+
+    // Remove default from all user's addresses
+    Address::where('user_id', $user->id)
+        ->update(['is_default' => false]);
+
+    // Set selected address as default
+    $address->update([
+        'is_default' => true
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Default address set successfully',
+        'data' => $address
+    ]);
+}
 }
