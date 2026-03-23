@@ -15,7 +15,6 @@ use App\Http\Controllers\API\User\VendorStoreController;
 use App\Http\Controllers\API\User\WalletController;
 use App\Http\Controllers\API\Vendor\VendorWalletController;
 use App\Http\Controllers\API\User\ShipmentController;
-use App\Http\Controllers\API\Vendor\VendorDashboardController;
 use App\Http\Controllers\API\Vendor\VendorInventoryController;
 use App\Http\Controllers\API\Admin\AdminCategoryController;
 use App\Http\Controllers\API\Admin\AdminAttributeController;
@@ -35,9 +34,16 @@ use App\Http\Controllers\API\Vendor\ProductQuestionController;
 use App\Http\Controllers\API\User\CouponController;
 use App\Http\Controllers\API\User\ReviewController;
 use App\Http\Controllers\API\Admin\AdminWithdrawController;
-
-
+use App\Http\Controllers\API\Admin\AdminAnalyticsController;
+use App\Http\Controllers\API\Admin\AdminSettingsController;
+use App\Http\Controllers\API\Admin\AdminOrderController;
+use App\Http\Controllers\API\Admin\AdminVendorDocumentController;
+use App\Http\Controllers\API\Admin\AdminVendorController;
+use App\Http\Controllers\API\Vendor\VendorDashboardController;
+use App\Http\Controllers\API\Admin\AdminDashboardController;
+use App\Http\Controllers\API\Admin\AdminReportController;
 use App\Http\Controllers\API\User\PaymentController;
+
 
 Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login', [AuthController::class, 'login']);
@@ -281,3 +287,93 @@ Route::middleware('auth:sanctum')
     ->put('/admin/roles/{id}', [AdminRoleController::class, 'updateRole']);    
 Route::middleware('auth:sanctum')
     ->put('/admin/permissions/{id}', [AdminPermissionController::class, 'updatePermission']);    
+Route::put('/addresses/{id}/default', [AddressController::class, 'setDefaultAddress'])
+    ->middleware('auth:sanctum');    
+Route::get('/orders/{id}/status-history', [OrderController::class, 'statusHistory'])
+    ->middleware('auth:sanctum');    
+Route::post('/reviews', [ReviewController::class, 'store'])
+    ->middleware('auth:sanctum');    
+Route::get('/products/{id}/reviews', [ReviewController::class, 'productReviews']);    
+Route::get('/admin/withdraw-requests', [AdminWithdrawController::class, 'index'])
+    ->middleware(['auth:sanctum']); // add admin middleware if you have
+
+Route::middleware(['auth:sanctum'])->prefix('admin/analytics')->group(function () {
+
+    Route::get('/sales', [AdminAnalyticsController::class, 'sales']);
+
+    Route::get('/orders', [AdminAnalyticsController::class, 'orders']);
+
+    Route::get('/vendors', [AdminAnalyticsController::class, 'vendors']);
+
+    Route::get('/products', [AdminAnalyticsController::class, 'products']);
+
+});
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+
+    Route::get('/settings', [AdminSettingsController::class, 'index']);
+
+    Route::put('/settings', [AdminSettingsController::class, 'update']);
+
+});
+
+// USER
+Route::get('/orders/{id}/invoice', [OrderController::class, 'invoice'])
+    ->middleware('auth:sanctum');
+
+// ADMIN
+Route::get('/admin/orders/summary', [AdminOrderController::class, 'summary'])
+    ->middleware(['auth:sanctum']); // add admin middleware if you have
+
+// VENDOR
+Route::get('/vendor/orders/summary', [VendorOrderController::class, 'summary'])
+    ->middleware(['auth:sanctum']);
+
+    // Vendor
+Route::middleware(['auth:sanctum'])->prefix('vendor')->group(function () {
+    Route::get('/documents', [VendorDocumentController::class, 'index']);
+    Route::post('/documents', [VendorDocumentController::class, 'store']);
+});
+
+// Admin
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+
+    Route::get('/vendor-documents/{id}', [AdminVendorDocumentController::class, 'show']);
+
+    Route::put('/vendors/{id}/approve', [AdminVendorController::class, 'approve']);
+    Route::put('/vendors/{id}/reject', [AdminVendorController::class, 'reject']);
+});
+
+Route::middleware(['auth:sanctum'])->prefix('vendor/dashboard')->group(function () {
+
+    Route::get('/stats', [VendorDashboardController::class, 'stats']);
+
+    Route::get('/revenue-chart', [VendorDashboardController::class, 'revenueChart']);
+
+});
+
+
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+
+    Route::prefix('dashboard')->group(function () {
+
+        Route::get('/stats', [AdminDashboardController::class, 'stats']);
+        Route::get('/revenue-chart', [AdminDashboardController::class, 'revenueChart']);
+        Route::get('/orders-chart', [AdminDashboardController::class, 'ordersChart']);
+
+    });
+
+    Route::get('/vendors/pending', [AdminDashboardController::class, 'pendingVendors']);
+});
+
+
+Route::middleware(['auth:sanctum'])->prefix('admin/reports')->group(function () {
+
+    Route::get('/sales', [AdminReportController::class, 'sales']);
+
+    Route::get('/vendor-sales', [AdminReportController::class, 'vendorSales']);
+
+    Route::get('/product-sales', [AdminReportController::class, 'productSales']);
+
+    Route::get('/customers', [AdminReportController::class, 'customers']);
+});
