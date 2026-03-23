@@ -9,6 +9,85 @@ use Illuminate\Support\Facades\Auth;
 
 class ReviewController extends Controller
 {
+
+public function productReviews(Request $request, $id)
+{
+    // Check product exists
+    $productExists = \App\Models\Product::where('id', $id)->exists();
+
+    if (!$productExists) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Product not found'
+        ], 404);
+    }
+
+    // Get reviews (only approved)
+    $reviews = Review::with('user:id,name') // adjust fields if needed
+        ->where('product_id', $id)
+        ->where('status', 1) // only approved
+        ->latest()
+        ->paginate(10);
+
+    // Average rating
+    $averageRating = Review::where('product_id', $id)
+        ->where('status', 1)
+        ->avg('rating');
+
+    return response()->json([
+        'success' => true,
+        'average_rating' => round($averageRating, 1),
+        'total_reviews' => $reviews->total(),
+        'data' => $reviews
+    ]);
+}
+
+public function store(Request $request)
+{
+    $user = Auth::user();
+
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthenticated'
+        ], 401);
+    }
+
+    $validated = $request->validate([
+        'product_id' => 'required|exists:products,id',
+        'rating' => 'required|integer|min:1|max:5',
+        'title' => 'nullable|string|max:255',
+        'review' => 'nullable|string'
+    ]);
+
+    // ❌ Prevent duplicate review (1 user = 1 review per product)
+    $existingReview = Review::where('user_id', $user->id)
+        ->where('product_id', $validated['product_id'])
+        ->first();
+
+    if ($existingReview) {
+        return response()->json([
+            'success' => false,
+            'message' => 'You have already reviewed this product'
+        ], 400);
+    }
+
+    $review = Review::create([
+        'user_id' => $user->id,
+        'product_id' => $validated['product_id'],
+        'rating' => $validated['rating'],
+        'title' => $validated['title'] ?? null,
+        'review' => $validated['review'] ?? null,
+        'status' => 0 // pending (recommended)
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Review submitted successfully',
+        'data' => $review
+    ], 201);
+}
+
   public function deleteReview($id)
 {
     $review = Review::find($id);
@@ -81,5 +160,6 @@ public function updateReview(Request $request, $id)
         'data' => $review
     ]);
 }
+
 
 }

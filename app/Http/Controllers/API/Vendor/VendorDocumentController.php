@@ -57,4 +57,23 @@ class VendorDocumentController extends Controller
             'url' => url($document->document_file)
         ], 201);
     }
+    public function index(Request $request)
+{
+    $vendor = $request->user()->vendor;
+
+    if (!$vendor) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Vendor not found'
+        ], 404);
+    }
+
+    $documents = VendorDocument::where('vendor_id', $vendor->id)->latest()->get();
+
+    return response()->json([
+        'success' => true,
+        'data' => $documents
+    ]);
+}
+
 }
