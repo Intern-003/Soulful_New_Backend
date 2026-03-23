@@ -10,6 +10,40 @@ use Illuminate\Support\Facades\Storage;
 class AdminBannerController extends Controller
 {
 
+ // ----------------------------
+ // Get All Banners
+ // GET /admin/banners
+ // ----------------------------
+public function getBanners()
+{
+    $banners = Banner::orderBy('position', 'asc')->get();
+
+    return response()->json([
+        'success' => true,
+        'data' => $banners
+    ]);
+}
+ // ----------------------------
+ // Get Single Banner
+ // GET /admin/banners/{id}
+ // ----------------------------
+public function getBanner($id)
+{
+    $banner = Banner::find($id);
+
+    if (!$banner) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Banner not found'
+        ], 404);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => $banner
+    ]);
+}
+
     // POST /admin/banners
     public function store(Request $request)
     {

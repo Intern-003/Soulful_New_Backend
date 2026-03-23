@@ -24,6 +24,54 @@ public function index(Request $request)
     ]);
 }
 
+
+// ----------------------------
+// Get All Withdraw Requests
+// GET /admin/withdraw-requests
+// ----------------------------
+public function getWithdrawRequests(Request $request)
+{
+    $query = WithdrawRequest::query();
+
+    // 🔍 Optional filter by status
+    if ($request->has('status')) {
+        $query->where('status', $request->status);
+    }
+
+    // 🔍 Optional filter by vendor
+    if ($request->has('vendor_id')) {
+        $query->where('vendor_id', $request->vendor_id);
+    }
+
+    // 📊 Latest first
+    $withdraws = $query->orderBy('created_at', 'desc')->get();
+
+    return response()->json([
+        'success' => true,
+        'data' => $withdraws
+    ]);
+}
+
+// ----------------------------
+// Get Single Withdraw Request
+// GET /admin/withdraw-requests/{id}
+// ----------------------------
+public function getWithdrawRequest($id)
+{
+    $withdraw = WithdrawRequest::find($id);
+
+    if (!$withdraw) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Withdraw request not found'
+        ], 404);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => $withdraw
+    ]);
+}
  public function approve($id)
 {
     $request = WithdrawRequest::find($id);

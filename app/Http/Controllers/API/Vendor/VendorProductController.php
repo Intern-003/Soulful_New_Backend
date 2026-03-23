@@ -64,17 +64,17 @@ class VendorProductController extends Controller
         ], 404);
     }
 
-    $user = Auth::user();
+    // $user = Auth::user();
 
-    // ✅ Admin bypass (adjust if needed)
-    if (!isset($user->is_admin) || !$user->is_admin) {
-        if ($product->vendor_id !== $user->vendor_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized to delete this product'
-            ], 403);
-        }
-    }
+    // // ✅ Admin bypass (adjust if needed)
+    // //if (!isset($user->is_admin) || !$user->is_admin) {
+    //     if ($product->vendor_id !== $user->vendor_id) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Unauthorized to delete this product'
+    //         ], 403);
+    //     }
+    // //}
 
     // ✅ Delete product images (IMPORTANT)
     $images = ProductImage::where('product_id', $product->id)->get();
@@ -125,17 +125,17 @@ public function updateStock(Request $request, $id)
         ], 404);
     }
 
-    $user = Auth::user();
+    // $user = Auth::user();
 
-    // ✅ Ownership check
-    if (!isset($user->is_admin) || !$user->is_admin) {
-        if ($product->vendor_id !== $user->vendor_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-    }
+    // // ✅ Ownership check
+    // if (!isset($user->is_admin) || !$user->is_admin) {
+    //     if ($product->vendor_id !== $user->vendor_id) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Unauthorized'
+    //         ], 403);
+    //     }
+    // }
 
     $request->validate([
         'stock' => 'required|integer|min:0',

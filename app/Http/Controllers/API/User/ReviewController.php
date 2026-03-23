@@ -88,6 +88,58 @@ public function store(Request $request)
     ], 201);
 }
 
+
+
+ // ----------------------------
+ // Create Review
+ // POST /reviews
+ // ----------------------------
+// public function store(Request $request)
+// {
+//     $user = Auth::guard('sanctum')->user();
+
+//     if (!$user) {
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Unauthorized'
+//         ], 401);
+//     }
+
+//     $request->validate([
+//         'product_id' => 'required|exists:products,id',
+//         'rating' => 'required|integer|min:1|max:5',
+//         'title' => 'nullable|string|max:255',
+//         'review' => 'nullable|string'
+//     ]);
+
+//     // ❌ Prevent duplicate review
+//     $existingReview = Review::where('product_id', $request->product_id)
+//         ->where('user_id', $user->id)
+//         ->first();
+
+//     if ($existingReview) {
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'You have already reviewed this product'
+//         ], 400);
+//     }
+
+//     $review = Review::create([
+//         'product_id' => $request->product_id,
+//         'user_id' => $user->id,
+//         'rating' => $request->rating,
+//         'title' => $request->title,
+//         'review' => $request->review,
+//         'status' => false // ✅ default: pending approval
+//     ]);
+
+//     return response()->json([
+//         'success' => true,
+//         'message' => 'Review submitted successfully (pending approval)',
+//         'data' => $review
+//     ], 201);
+// }
+
   public function deleteReview($id)
 {
     $review = Review::find($id);

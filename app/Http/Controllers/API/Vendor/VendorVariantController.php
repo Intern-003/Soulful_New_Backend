@@ -123,17 +123,17 @@ public function updateVariant(Request $request, $id)
 
     $product = Product::find($variant->product_id);
 
-    $user = Auth::user();
+    // $user = Auth::user();
 
-    // ✅ Ownership check (admin bypass optional)
-    if (!isset($user->is_admin) || !$user->is_admin) {
-        if ($product->vendor_id !== $user->vendor_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-    }
+    // // ✅ Ownership check (admin bypass optional)
+    // if (!isset($user->is_admin) || !$user->is_admin) {
+    //     if ($product->vendor_id !== $user->vendor_id) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Unauthorized'
+    //         ], 403);
+    //     }
+    // }
 
     // ✅ Validation
     $request->validate([
