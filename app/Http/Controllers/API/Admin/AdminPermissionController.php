@@ -35,6 +35,36 @@ class AdminPermissionController extends Controller
     /**
      * ✅ Create Permission
      */
+public function getPermissions()
+{
+    $permissions = Permission::all();
+
+    return response()->json([
+        'success' => true,
+        'data' => $permissions
+    ]);
+}
+public function getPermission($id)
+{
+    $permission = Permission::find($id);
+
+    if (!$permission) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Permission not found'
+        ], 404);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => $permission
+    ]);
+}
+
+    // ----------------------------
+    // Create Permission
+    // POST /admin/permissions
+    // ----------------------------
     public function store(Request $request)
     {
         $request->validate([
@@ -91,6 +121,26 @@ class AdminPermissionController extends Controller
             'module' => strtolower($request->module),
             'action' => strtolower($request->action),
             'name' => $name,
+    // ----------------------------
+    // Update Permission
+    // ----------------------------
+    public function updatePermission(Request $request, $id)
+    {
+        $permission = Permission::find($id);
+
+        if (!$permission) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Permission not found'
+            ], 404);
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:255|unique:permissions,name,' . $id
+        ]);
+
+        $permission->update([
+            'name' => $request->name
         ]);
 
         return response()->json([
@@ -100,6 +150,7 @@ class AdminPermissionController extends Controller
         ]);
     }
 
+<<<<<<< HEAD
     /**
      * ✅ Delete Permission
      */
@@ -108,6 +159,24 @@ class AdminPermissionController extends Controller
         $permission = Permission::findOrFail($id);
 
         // ❌ Prevent delete if used in roles
+=======
+
+    // ----------------------------
+    // Delete Permission
+    // ----------------------------
+    public function deletePermission($id)
+    {
+        $permission = Permission::find($id);
+
+        if (!$permission) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Permission not found'
+            ], 404);
+        }
+
+        // ✅ Use relationship instead of DB query
+>>>>>>> a0a39bc8f6dacae767bf89e4f7e4aaaf6e9fa8f5
         if ($permission->roles()->exists()) {
             return response()->json([
                 'success' => false,
@@ -115,6 +184,7 @@ class AdminPermissionController extends Controller
             ], 400);
         }
 
+<<<<<<< HEAD
         // ❌ Prevent delete if used in user overrides
         if ($permission->users()->exists()) {
             return response()->json([
@@ -123,6 +193,8 @@ class AdminPermissionController extends Controller
             ], 400);
         }
 
+=======
+>>>>>>> a0a39bc8f6dacae767bf89e4f7e4aaaf6e9fa8f5
         $permission->delete();
 
         return response()->json([
@@ -130,6 +202,7 @@ class AdminPermissionController extends Controller
             'message' => 'Permission deleted successfully'
         ]);
     }
+<<<<<<< HEAD
     // Assign permissions to role
 public function assignPermissionsToRole(Request $request, $roleId)
 {
@@ -218,4 +291,6 @@ public function getUserPermissions($userId)
 }
 
 
+=======
+>>>>>>> a0a39bc8f6dacae767bf89e4f7e4aaaf6e9fa8f5
 }
