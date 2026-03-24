@@ -302,27 +302,18 @@ Route::get('/orders/{id}/status-history', [OrderController::class, 'statusHistor
 Route::post('/reviews', [ReviewController::class, 'store'])
     ->middleware('auth:sanctum');    
 Route::get('/products/{id}/reviews', [ReviewController::class, 'productReviews']);    
-Route::get('/admin/withdraw-requests', [AdminWithdrawController::class, 'index'])
-    ->middleware(['auth:sanctum']); // add admin middleware if you have
+
 
 Route::middleware(['auth:sanctum'])->prefix('admin/analytics')->group(function () {
-
     Route::get('/sales', [AdminAnalyticsController::class, 'sales']);
-
     Route::get('/orders', [AdminAnalyticsController::class, 'orders']);
-
     Route::get('/vendors', [AdminAnalyticsController::class, 'vendors']);
-
     Route::get('/products', [AdminAnalyticsController::class, 'products']);
-
 });
 
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
-
     Route::get('/settings', [AdminSettingsController::class, 'index']);
-
     Route::put('/settings', [AdminSettingsController::class, 'update']);
-
 });
 
 // USER
@@ -385,6 +376,8 @@ Route::middleware(['auth:sanctum'])->prefix('admin/reports')->group(function () 
 
     Route::get('/customers', [AdminReportController::class, 'customers']);
 });
+
+
 Route::prefix('support')->middleware('auth:sanctum')->group(function() {
     Route::get('/tickets', [SupportController::class, 'index']); // list all tickets
     Route::post('/tickets', [SupportController::class, 'store']); // view ticket

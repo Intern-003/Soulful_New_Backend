@@ -10,25 +10,7 @@ use App\Models\Vendor;
 class AdminVendorController extends Controller
 {
     
-public function show($id)
-{
-    $vendor = Vendor::find($id);
 
-    if (!$vendor) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Vendor not found'
-        ], 404);
-    }
-
-    $documents = VendorDocument::where('vendor_id', $vendor->id)->get();
-
-    return response()->json([
-        'success' => true,
-        'vendor' => $vendor->store_name,
-        'documents' => $documents
-    ]);
-}
 public function approve($id)
 {
     $vendor = Vendor::find($id);
