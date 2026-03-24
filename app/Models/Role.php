@@ -11,34 +11,31 @@ class Role extends Model
 
     protected $fillable = [
         'name',
-        'permissions', // legacy JSON permissions (optional)
     ];
 
-    protected $casts = [
-        'permissions' => 'array', // JSON column cast to array
-    ];
-
-    // ----------------------------
-    // Relationship: Role has many Users
-    // ----------------------------
+    /**
+     * Many-to-Many: Role ↔ Users
+     */
     public function users()
     {
-        return $this->hasMany(User::class);
+        return $this->belongsToMany(User::class, 'user_roles');
     }
 
-    // ----------------------------
-    // Relationship: Role belongs to many Permissions (via role_permissions pivot)
-    // ----------------------------
-    public function permissionsList()
+    /**
+     * Many-to-Many: Role ↔ Permissions
+     */
+    public function permissions()
     {
         return $this->belongsToMany(Permission::class, 'role_permissions');
     }
 
-    // ----------------------------
-    // Check if Role has a permission
-    // ----------------------------
+    /**
+     * Check if role has a specific permission
+     */
     public function hasPermission(string $permissionName): bool
     {
-        return $this->permissionsList()->where('name', $permissionName)->exists();
+        return $this->permissions()
+            ->where('name', $permissionName)
+            ->exists();
     }
 }
