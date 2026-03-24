@@ -13,23 +13,21 @@ class User extends Authenticatable implements MustVerifyEmail
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
-     * The attributes that are mass assignable.
+     * Mass assignable attributes
      */
     protected $fillable = [
         'name',
         'email',
         'password',
         'phone',
-        'role_id',          // foreign key to Role
-        'role',             // string role (admin/user/vendor)
-        'status',           // account status
+        'status',
         'avatar',
         'email_verified_at',
         'last_login_at',
     ];
 
     /**
-     * The attributes that should be hidden for arrays / JSON.
+     * Hidden attributes
      */
     protected $hidden = [
         'password',
@@ -37,7 +35,7 @@ class User extends Authenticatable implements MustVerifyEmail
     ];
 
     /**
-     * The attributes that should be cast to native types.
+     * Casts
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
@@ -46,24 +44,35 @@ class User extends Authenticatable implements MustVerifyEmail
     ];
 
     // ----------------------------
-    // Relationship: User belongs to Role
+    // 🔹 RBAC RELATIONS
     // ----------------------------
-    public function role()
+
+    /**
+     * Many-to-Many: User ↔ Roles
+     */
+    public function roles()
     {
-        return $this->belongsTo(Role::class);
+        return $this->belongsToMany(Role::class, 'user_roles');
+    }
+
+    /**
+     * Many-to-Many: User ↔ Permissions (Overrides)
+     */
+    public function permissions()
+    {
+        return $this->belongsToMany(Permission::class, 'user_permissions')
+            ->withPivot('is_allowed');
     }
 
     // ----------------------------
-    // Relationship: User has one Vendor (if role = vendor)
+    // 🔹 BUSINESS RELATIONS
     // ----------------------------
+
     public function vendor()
     {
         return $this->hasOne(Vendor::class);
     }
 
-    // ----------------------------
-    // Relationship: User has many Orders (if applicable)
-    // ----------------------------
     public function orders()
     {
         return $this->hasMany(Order::class);
@@ -74,30 +83,75 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Address::class);
     }
 
-    public function cart() { return $this->hasOne(Cart::class); }
-    public function wishlists() { return $this->hasMany(Wishlist::class); }
-    public function reviews() { return $this->hasMany(Review::class); }
-    public function notifications() { return $this->hasMany(Notification::class); }
-    public function activityLogs() { return $this->hasMany(ActivityLog::class); }
-
-
-    // ----------------------------
-    // Check if user has a permission
-    // ----------------------------
-    public function hasPermission(string $module, string $action): bool
+    public function cart()
     {
-        if (!$this->role || !$this->role->permissions) return false;
+        return $this->hasOne(Cart::class);
+    }
 
-        $permissions = json_decode($this->role->permissions, true);
+    public function wishlists()
+    {
+        return $this->hasMany(Wishlist::class);
+    }
 
-        return isset($permissions[$module]) && in_array($action, $permissions[$module]);
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function activityLogs()
+    {
+        return $this->hasMany(ActivityLog::class);
     }
 
     // ----------------------------
-    // Helper: Check if user is active
+    // 🔥 CORE PERMISSION LOGIC
     // ----------------------------
+
+public function hasPermission(string $permissionName): bool
+{
+    // 1. Super Admin → full access
+    if ($this->roles->contains('name', 'super_admin')) {
+        return true;
+    }
+
+    // 2. Get permission record
+    $permission = Permission::where('name', $permissionName)->first();
+
+    if (!$permission) {
+        return false;
+    }
+
+    // 3. Check USER override (highest priority)
+    $userPermission = $this->permissions()
+        ->where('permission_id', $permission->id)
+        ->first();
+
+    if ($userPermission) {
+        return (bool) $userPermission->pivot->is_allowed;
+    }
+
+    // 4. Check ROLE permissions
+    foreach ($this->roles as $role) {
+        if ($role->permissions->contains('id', $permission->id)) {
+            return true;
+        }
+    }
+
+    // 5. Default deny
+    return false;
+}
+
+    // ----------------------------
+    // 🔹 Helper: Active User
+    // ----------------------------
+
     public function isActive(): bool
     {
-        return $this->status === 1;
+        return $this->status === true;
     }
 }

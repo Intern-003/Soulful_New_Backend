@@ -45,6 +45,7 @@ use App\Http\Controllers\API\Admin\AdminReportController;
 use App\Http\Controllers\API\User\PaymentController;
 use App\Http\Controllers\API\User\SupportController;
 use App\Http\Controllers\API\Admin\AdminSupportController;
+use App\Http\Controllers\API\Admin\UserRoleController;
 
 
 Route::post('auth/register', [AuthController::class, 'register']);
@@ -400,3 +401,34 @@ Route::prefix('admin/support')->middleware(['auth:sanctum', 'role:admin'])->grou
     Route::post('/{id}/reply', [AdminSupportController::class, 'reply']); // admin reply
     Route::patch('/{id}/status', [AdminSupportController::class, 'updateStatus']); // change status
 });
+
+
+Route::prefix('admin/permissions')->group(function () {
+    Route::get('/', [AdminPermissionController::class, 'index']);
+    Route::post('/', [AdminPermissionController::class, 'store']);
+    Route::put('/{id}', [AdminPermissionController::class, 'update']);
+    Route::delete('/{id}', [AdminPermissionController::class, 'destroy']);
+});
+
+Route::prefix('admin/roles')->group(function () {
+
+    Route::get('/', [AdminRoleController::class, 'index']);
+    Route::post('/', [AdminRoleController::class, 'store']);
+    Route::put('/{id}', [AdminRoleController::class, 'update']);
+    Route::delete('/{id}', [AdminRoleController::class, 'destroy']);
+
+    // 🔥 RBAC core
+    Route::post('/{id}/permissions', [AdminRoleController::class, 'assignPermissions']);
+    Route::get('/{id}/permissions', [AdminRoleController::class, 'getRolePermissions']);
+
+});
+
+Route::prefix('admin/users')->group(function () {
+
+    Route::post('/{userId}/roles', [UserRoleController::class, 'assignRoles']);
+    Route::get('/{userId}/roles', [UserRoleController::class, 'getUserRoles']);
+
+});
+
+Route::get('/admin/users/{id}/permissions', [AdminPermissionController::class, 'getUserPermissions'])
+    ->middleware(['auth:sanctum']);
