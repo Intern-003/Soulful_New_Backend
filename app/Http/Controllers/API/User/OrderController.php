@@ -95,6 +95,7 @@ class OrderController extends Controller
     // GET /orders/{id}/invoice
 public function invoice(Request $request, $id)
 {
+    //dd($id);
     $order = Order::with([
         'items.product',
         'items.vendor',

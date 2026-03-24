@@ -138,7 +138,7 @@ class AddressController extends Controller
 public function setDefaultAddress(Request $request, $id)
 {
     $user = $request->user();
-
+//dd($user);
     // Find address
     $address = Address::find($id);
 

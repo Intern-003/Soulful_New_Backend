@@ -10,19 +10,19 @@ use App\Models\VendorWallet;
 class AdminWithdrawController extends Controller
 {
 
-public function index(Request $request)
-{
-    $requests = WithdrawRequest::with([
-            'vendor:id,name' // adjust fields if needed
-        ])
-        ->latest()
-        ->paginate(10);
+// public function index(Request $request)
+// {
+//     $requests = WithdrawRequest::with([
+//             'vendor:id,name' // adjust fields if needed
+//         ])
+//         ->latest()
+//         ->paginate(10);
 
-    return response()->json([
-        'success' => true,
-        'data' => $requests
-    ]);
-}
+//     return response()->json([
+//         'success' => true,
+//         'data' => $requests
+//     ]);
+// }
 
 
 // ----------------------------
