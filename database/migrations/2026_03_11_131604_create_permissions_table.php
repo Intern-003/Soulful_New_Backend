@@ -11,11 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-Schema::create('permissions', function (Blueprint $table) {
+        Schema::create('permissions', function (Blueprint $table) {
     $table->id();
-    $table->string('name')->unique(); // product.create
-    $table->string('module');         // product
-    $table->string('action');         // create, update, delete
+    $table->string('name');
     $table->timestamps();
 });
     }

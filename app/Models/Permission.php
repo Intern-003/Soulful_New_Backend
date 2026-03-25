@@ -18,9 +18,19 @@ class Permission extends Model
     /**
      * Many-to-Many: Permission ↔ Roles
      */
-    public function roles()
+    // public function roles()
+    // {
+    //     return $this->belongsToMany(Role::class, 'role_permissions');
+    // }
+
+     public function roles()
     {
-        return $this->belongsToMany(Role::class, 'role_permissions');
+        return $this->belongsToMany(
+            Role::class,
+            'role_permissions',
+            'permission_id',
+            'role_id'
+        );
     }
 
     /**

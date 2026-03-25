@@ -22,4 +22,17 @@ class Vendor extends Model
     public function wallet() { return $this->hasOne(VendorWallet::class); }
     public function transactions() { return $this->hasMany(VendorTransaction::class); }
     public function withdrawRequests() { return $this->hasMany(WithdrawRequest::class); }
+
+    public function role()
+{
+    return $this->belongsTo(Role::class);
+}
+    public function hasPermission($permissionName)
+{
+    if (!$this->role) return false;
+
+    return $this->role->permissions()
+        ->where('name', $permissionName)
+        ->exists();
+}
 }
