@@ -8,12 +8,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckPermission
 {
-    /**
-     * Handle an incoming request.
-     */
-    public function handle(Request $request, Closure $next, string $module, string $action): Response
+    public function handle(Request $request, Closure $next, string $permission): Response
     {
-        $user = $request->user();
+        $user = $request->user('sanctum');
 
         // ❌ Not logged in
         if (!$user) {
@@ -23,16 +20,19 @@ class CheckPermission
             ], 401);
         }
 
+        // Load role + permissions
+        $user->loadMissing('role.permissions');
+
         // ✅ Super Admin bypass
-        if ($user->role === 'super_admin') {
+        if ($user->role && $user->role->name === 'admin') {
             return $next($request);
         }
 
         // ❌ Permission check
-        if (!$user->hasPermission($module, $action)) {
+        if (!$user->hasPermission($permission)) {
             return response()->json([
                 'success' => false,
-                'message' => "Permission denied: {$module}.{$action}"
+                'message' => "Permission denied: {$permission}"
             ], 403);
         }
 

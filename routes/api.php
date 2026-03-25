@@ -4,7 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\User\CategoryController;
 use App\Http\Controllers\API\User\ProductController;
-use App\Http\Controllers\API\common\AuthController;
+use App\Http\Controllers\API\Common\AuthController;
 use App\Http\Controllers\API\Common\ProfileController;
 use App\Http\Controllers\API\Common\AddressController;
 use App\Http\Controllers\API\User\CartController;
@@ -45,50 +45,67 @@ use App\Http\Controllers\API\Admin\AdminReportController;
 use App\Http\Controllers\API\User\PaymentController;
 use App\Http\Controllers\API\User\SupportController;
 use App\Http\Controllers\API\Admin\AdminSupportController;
-use App\Http\Controllers\API\Admin\UserRoleController;
-use App\Http\Controllers\API\Admin\PermissionController;
+use App\Http\Controllers\API\Admin\AdminUserController;
+use App\Http\Controllers\API\Admin\AdminLogController;
 
-
+// Auth & public routes
 Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login', [AuthController::class, 'login']);
+Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::get('profiles', [ProfileController::class, 'getProfiles']);
 Route::get('profile/{id}', [ProfileController::class, 'getProfileById']);
 Route::get('addresses', [AddressController::class, 'getAddresses']);
 Route::get('carts', [CartController::class, 'getCarts']);
+Route::get('wishlists', [WishlistController::class, 'getWishlists']);
+
+// Cart - PUBLIC routes
 Route::post('/cart/add', [CartController::class, 'addToCart']);
 Route::get('/cart', [CartController::class, 'getCart']);
-Route::put('/cart/{id}', [CartController::class, 'updateCartItem']);
-Route::delete('/cart-item/{id}', [CartController::class, 'deleteCartItem']);
-Route::delete('/cart/clear', [CartController::class, 'clearCart']);
 
-    
-Route::get('wishlists', [WishlistController::class, 'getWishlists']);
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('wishlist', [WishlistController::class, 'getWishlist']);
-    Route::post('/wishlist', [WishlistController::class, 'store']);
-    Route::delete('wishlist/{id}', [WishlistController::class, 'remove']);
+// Only update or delete requires auth
+// Route::middleware('auth:sanctum')->group(function () {
+    Route::put('/cart/{id}', [CartController::class, 'updateCartItem']);
+    Route::delete('/cart-item/{id}', [CartController::class, 'deleteCartItem']);
+    Route::delete('/cart/clear', [CartController::class, 'clearCart']);
+// });
+
+// Categories
+Route::prefix('categories')->group(function () {
+    Route::get('/', [CategoryController::class, 'index']);
+    Route::get('/{id}', [CategoryController::class, 'show']);
+    Route::get('/{id}/children', [CategoryController::class, 'children']);
+    Route::get('/{slug}/products', [CategoryController::class, 'products']);
 });
 
-
-Route::middleware('auth:sanctum')->group(function(){
-    Route::get('/checkout/summary', [CheckoutController::class,'summary']);
-    Route::get('/checkout/data', [CheckoutController::class,'data']);
-    Route::post('/checkout/validate', [CheckoutController::class, 'validateCheckout']);
-    Route::post('/place-order', [CheckoutController::class, 'checkout']);
+// Products
+Route::prefix('products')->group(function () {
+    Route::get('/search', [ProductController::class, 'search']);
+    Route::get('/featured', [ProductController::class, 'featured']);
+    Route::get('/latest', [ProductController::class, 'latest']);
+    Route::get('/deals', [ProductController::class, 'deals']);
+    Route::get('/best-sellers', [ProductController::class, 'bestSellers']);
+    Route::get('/', [ProductController::class, 'index']);
+    Route::get('/{id}/related', [ProductController::class, 'related']);
+    Route::get('/{id}/images', [ProductController::class, 'images']);
+    Route::get('/{id}/reviews', [ProductController::class, 'reviews']);
+    Route::get('/{id}/rating', [ProductController::class, 'rating']);
+    Route::get('/{slug}', [ProductController::class, 'show']);
 });
 
-
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/address', [AddressController::class, 'getAddress']);
-    Route::post('/address', [AddressController::class, 'store']);
-    Route::delete('/address/{id}', [AddressController::class, 'deleteAddress']);
-    Route::put('/address/{id}', [AddressController::class, 'updateAddress']);
+// Vendors
+Route::prefix('vendors')->group(function () {
+    Route::get('/', [VendorStoreController::class, 'index']);
+    Route::get('/{slug}', [VendorStoreController::class, 'show']);
+    Route::get('/{slug}/products', [VendorStoreController::class, 'products']);
+    Route::get('/{slug}/reviews', [VendorStoreController::class, 'reviews']);
 });
-    
-Route::get('/shipping/methods', [CheckoutController::class,'shippingMethods']);
 
+// Authenticated routes
 Route::middleware('auth:sanctum')->group(function () {
+
+    // User Auth
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::post('auth/refresh-token', [AuthController::class, 'refreshToken']);
     Route::get('auth/me', [AuthController::class, 'me']);
@@ -99,328 +116,195 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('profile/avatar', [AuthController::class, 'deleteAvatar']);
     Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
 
-});
+    // Address CRUD
+    Route::get('/address', [AddressController::class, 'getAddress']);
+    Route::post('/address', [AddressController::class, 'store']);
+    Route::put('/address/{id}', [AddressController::class, 'updateAddress']);
+    Route::delete('/addresses/{id}', [AddressController::class, 'deleteAddress']);
+    Route::put('/addresses/{id}/default', [AddressController::class, 'setDefaultAddress']);
 
-Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
+    // Cart
+    // Route::post('/cart/add', [CartController::class, 'addToCart']);
+    // Route::get('/cart', [CartController::class, 'getCart']);
+    // Route::put('/cart/{id}', [CartController::class, 'updateCartItem']);
+    // Route::delete('/cart-item/{id}', [CartController::class, 'deleteCartItem']);
+    // Route::delete('/cart/clear', [CartController::class, 'clearCart']);
 
+    // Wishlist
+    Route::get('wishlist', [WishlistController::class, 'getWishlist']);
+    Route::post('/wishlist', [WishlistController::class, 'store']);
+    Route::delete('wishlist/{id}', [WishlistController::class, 'remove']);
 
-Route::prefix('categories')->group(function () {
-    Route::get('/', [CategoryController::class, 'index']);
-    Route::get('/{id}', [CategoryController::class, 'show']);
-    Route::get('/{id}/children', [CategoryController::class, 'children']);
-    Route::get('/{slug}/products', [CategoryController::class,'products']);
-});
+    // Checkout & Orders
+    Route::get('/checkout/summary', [CheckoutController::class, 'summary']);
+    Route::get('/checkout/data', [CheckoutController::class, 'data']);
+    Route::post('/checkout/validate', [CheckoutController::class, 'validateCheckout']);
+    Route::post('/place-order', [CheckoutController::class, 'checkout']);
 
+    Route::prefix('orders')->group(function () {
+        Route::get('/', [OrderController::class, 'index']);
+        Route::get('/{id}', [OrderController::class, 'show']);
+        Route::get('/{id}/track', [OrderController::class, 'track']);
+        Route::get('/{id}/shipment', [OrderController::class, 'shipment']);
+        Route::get('/{id}/tracking', [OrderController::class, 'tracking']);
+        Route::get('/{id}/invoice', [OrderController::class, 'invoice']);
+        Route::get('/{id}/status-history', [OrderController::class, 'statusHistory']);
 
-Route::prefix('products')->group(function () {
-    // Special routes FIRST
-    Route::get('/search', [ProductController::class, 'search']);
-    Route::get('/featured', [ProductController::class, 'featured']);
-    Route::get('/latest', [ProductController::class, 'latest']);
-    Route::get('/deals', [ProductController::class, 'deals']);
-    Route::get('/best-sellers', [ProductController::class, 'bestSellers']);
+        Route::post('/', [OrderController::class, 'store']);
+        Route::post('/{id}/cancel', [OrderController::class, 'cancel']);
+        Route::post('/{id}/return', [OrderController::class, 'return']);
+        Route::post('/{id}/exchange', [OrderController::class, 'exchange']);
+    });
 
-    // Listing
-    Route::get('/', [ProductController::class, 'index']);
-
-    // Related
-    Route::get('/{id}/related', [ProductController::class, 'related']);
-
-    // Product detail LAST
-    Route::get('/{id}/images',[ProductController::class,'images']);
-    Route::get('/{id}/reviews',[ProductController::class,'reviews']);
-    Route::get('/{id}/rating',[ProductController::class,'rating']);
-    Route::get('/{slug}', [ProductController::class, 'show']);
-    
-});
-
-Route::prefix('vendors')->group(function(){
-
-Route::get('/',[VendorStoreController::class,'index']);
-Route::get('/{slug}',[VendorStoreController::class,'show']);
-Route::get('/{slug}/products',[VendorStoreController::class,'products']);
-Route::get('/{slug}/reviews',[VendorStoreController::class,'reviews']);
-
-});
-
-
-Route::post('/vendor/coupons',[VendorCouponController::class,'store']);
-Route::put('/vendor/coupons/{id}',[VendorCouponController::class,'update']);
-Route::delete('/vendor/coupons/{id}',[VendorCouponController::class,'destroy']);
-
-//Coupon(User level)
-Route::middleware('auth:sanctum')->group(function () {
-Route::post('/coupon/apply',[CouponController::class,'applyCoupon']);
-Route::post('/coupon/remove',[CouponController::class,'removeCoupon']);
-
-});
-
-Route::get('/coupon/available',[CouponController::class,'availableCoupons']);
-Route::post('/coupon/validate',[CouponController::class,'validateCoupon']);
-
-
-Route::middleware('auth:sanctum')->prefix('orders')->group(function(){
-
-    Route::get('/', [OrderController::class,'index']);
-    Route::get('/{id}', [OrderController::class,'show']);
-    Route::get('/{id}/track', [OrderController::class,'track']);
-    Route::get('/{id}/shipment', [OrderController::class,'shipment']);
-    Route::get('/{id}/tracking', [OrderController::class,'tracking']);
-    Route::get('/{id}/invoice', [OrderController::class,'invoice']);
-
-    Route::post('/', [OrderController::class,'store']);
-    Route::post('/{id}/cancel', [OrderController::class,'cancel']);
-    Route::post('/{id}/return', [OrderController::class,'return']);
-    Route::post('/{id}/exchange', [OrderController::class,'exchange']);
-
-});
-
-
-Route::middleware('auth:sanctum')->group(function () {
-
+    // Payment
     Route::post('/payment/create-order', [PaymentController::class, 'createOrder']);
     Route::post('/payment/verify', [PaymentController::class, 'verify']);
     Route::get('/payment/status/{order_id}', [PaymentController::class, 'status']);
 
+    // Wallet
+    Route::get('/wallet', [WalletController::class, 'wallet']);
+    Route::get('/wallet/transactions', [WalletController::class, 'transactions']);
+
+    Route::get('/vendor/wallet', [VendorWalletController::class, 'wallet']);
+    Route::get('/vendor/wallet/transactions', [VendorWalletController::class, 'transactions']);
+
+    Route::post('/reviews', [ReviewController::class, 'store']);
+    Route::put('/reviews/{id}', [ReviewController::class, 'updateReview']);
+    Route::delete('/reviews/{id}', [ReviewController::class, 'deleteReview']);
 });
 
-// Admin
-Route::middleware(['auth:sanctum','admin'])->group(function () {
-    Route::post('/payment/refund', [PaymentController::class, 'refund']);
-});
-
+// Coupon routes
 Route::middleware('auth:sanctum')->group(function () {
-
-    Route::get('/wallet', [WalletController::class,'wallet']);
-    Route::get('/wallet/transactions', [WalletController::class,'transactions']);
-
-    Route::get('/vendor/wallet', [VendorWalletController::class,'wallet']);
-    Route::get('/vendor/wallet/transactions', [VendorWalletController::class,'transactions']);
-
+    Route::post('/coupon/apply', [CouponController::class, 'applyCoupon']);
+    Route::post('/coupon/remove', [CouponController::class, 'removeCoupon']);
 });
 
-Route::middleware('auth:sanctum')->group(function(){
-Route::get('/vendor/dashboard',[VendorDashboardController::class,'dashboard']);
-Route::get('/vendor/dashboard/stats',[VendorDashboardController::class,'stats']);
-Route::get('/vendor/orders/summary',[VendorDashboardController::class,'ordersSummary']);
-});
-Route::get('/vendor/inventory/{vendor_id}',[VendorInventoryController::class,'inventory']);
-Route::get('/vendor/products/low-stock/{vendor_id}',[VendorInventoryController::class,'lowStock']);
+Route::get('/coupon/available', [CouponController::class, 'availableCoupons']);
+Route::post('/coupon/validate', [CouponController::class, 'validateCoupon']);
 
-
-Route::post('/admin/categories',[AdminCategoryController::class,'store']);
-Route::post('/admin/subcategories',[AdminCategoryController::class,'storeSubcategory']);
-Route::post('/admin/attributes',[AdminAttributeController::class,'store']);
-Route::post('/admin/attributes/{id}/values', [AdminAttributeValueController::class,'store']);
-Route::post('/admin/commissions',[AdminCommissionController::class,'store']);
-
-Route::post('/vendor/products',[VendorProductController::class,'store']);
-Route::post('/vendor/products/{id}/images',[ProductImageController::class,'store']);
-Route::post('/vendor/products/{id}/variants',[VendorVariantController::class,'store']);
-
-Route::post('/vendor/wallet/withdraw',[VendorWalletController::class,'withdraw']);
-Route::post('/vendor/register',[VendorRegisterController::class,'register']);
-Route::post('/vendor/documents',[VendorDocumentController::class,'store']);
-Route::post('/vendor/orders/{id}/shipment',[VendorOrderController::class,'createShipment']);
-Route::post('/products/questions/{id}/answer', [ProductQuestionController::class, 'answer']);
-Route::post('/products/{id}/questions', [ProductQuestionController::class, 'store']);
-Route::get('/products/{id}/questions', [ProductQuestionController::class, 'index']);
-Route::middleware('auth:sanctum')->delete('/profile/avatar', [ProfileController::class, 'deleteAvatar']);
-Route::middleware('auth:sanctum')->delete('/addresses/{id}', [AddressController::class, 'deleteAddress']);
-
-Route::middleware(['auth:sanctum'])
-    ->delete('/admin/categories/{id}', [AdminCategoryController::class, 'deleteCategory']);
-Route::middleware(['auth:sanctum'])
-    ->delete('/admin/subcategories/{id}', [AdminCategoryController::class, 'deleteSubcategory']);
-Route::middleware(['auth:sanctum'])
-    ->put('/admin/categories/{id}', [AdminCategoryController::class, 'updateCategory']);
-Route::middleware(['auth:sanctum'])
-    ->put('/admin/subcategories/{id}', [AdminCategoryController::class, 'updateSubcategory']);
-
-
-Route::delete('/vendor/products/images/{id}', [ProductImageController::class, 'deleteProductImage']);
-Route::middleware(['auth:sanctum'])
-    ->delete('/admin/attributes/{id}', [AdminAttributeController::class, 'deleteAttribute']);
-Route::middleware(['auth:sanctum'])
-    ->delete('/admin/attribute-values/{id}', [AdminAttributeValueController::class, 'deleteAttributeValue']);
-Route::middleware('auth:sanctum')
-    ->delete('/vendor/product-variants/{id}', [VendorVariantController::class, 'deleteVariant']);
-Route::middleware('auth:sanctum')
-    ->delete('/vendor/products/{id}', [VendorProductController::class, 'deleteProduct']);
-Route::middleware('auth:sanctum')
-    ->delete('/vendor/coupons/{id}', [VendorCouponController::class, 'destroy']);
-
-Route::middleware('auth:sanctum')
-    ->post('/reviews', [ReviewController::class, 'store']);
-Route::middleware('auth:sanctum')
-    ->put('/reviews/{id}', [ReviewController::class, 'updateReview']);
-Route::middleware('auth:sanctum')
-    ->delete('/reviews/{id}', [ReviewController::class, 'deleteReview']);
-
-
-Route::put('/admin/attributes/{id}', [AdminAttributeController::class, 'updateAttribute']);
-Route::put('/admin/attribute-values/{id}', [AdminAttributeValueController::class, 'updateAttributeValue']);
-Route::put('/vendor/product-variants/{id}', [VendorVariantController::class, 'updateVariant']); 
-Route::put('/vendor/products/{id}/stock', [VendorProductController::class, 'updateStock']);    
-Route::put('/vendor/products/{id}', [VendorProductController::class, 'updateProduct']);  
-Route::middleware('auth:sanctum')
-    ->put('/vendor/coupons/{id}', [VendorCouponController::class, 'update']);   
-
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/admin/withdraw-requests', [AdminWithdrawController::class, 'getWithdrawRequests']);
-    Route::get('/admin/withdraw-requests/{id}', [AdminWithdrawController::class, 'getWithdrawRequest']);
-    Route::put('/admin/withdraw-requests/{id}/approve', [AdminWithdrawController::class, 'approve']);
-    Route::put('/admin/withdraw-requests/{id}/reject', [AdminWithdrawController::class, 'reject']);
-});
-Route::middleware('auth:sanctum')
-    ->put('/admin/vendors/{id}/commission', [AdminCommissionController::class, 'updateVendorCommission']);
-
-
-//Banners
-Route::get('/admin/banners',[AdminBannerController::class,'getBanners']);
-Route::get('/admin/banners/{id}',[AdminBannerController::class,'getBanner']);
-Route::put('/admin/banners/{id}', [AdminBannerController::class, 'updateBanner']);  
-Route::delete('/admin/banners/{id}', [AdminBannerController::class, 'deleteBanner']); 
-    
-//Roles & Permissions
-Route::get('/admin/roles',[AdminRoleController::class,'getRoles']);
-Route::get('/admin/roles/{id}',[AdminRoleController::class,'getRole']);
-Route::get('/admin/permissions',[AdminPermissionController::class,'getPermissions']);
-Route::get('/admin/permissions/{id}',[AdminPermissionController::class,'getPermission']);
-Route::post('/admin/roles',[AdminRoleController::class,'store']);
-Route::post('/admin/permissions',[AdminPermissionController::class,'store']);
-Route::put('/admin/roles/{id}', [AdminRoleController::class, 'updateRole']);    
-Route::put('/admin/permissions/{id}', [AdminPermissionController::class, 'updatePermission']);
-Route::delete('/admin/roles/{id}', [AdminRoleController::class, 'deleteRole']);
-Route::delete('/admin/permissions/{id}', [AdminPermissionController::class, 'deletePermission']);  
-
-
-//Support-Tickets
-Route::put('/addresses/{id}/default', [AddressController::class, 'setDefaultAddress'])
-    ->middleware('auth:sanctum');    
-Route::get('/orders/{id}/status-history', [OrderController::class, 'statusHistory'])
-    ->middleware('auth:sanctum');    
-Route::post('/reviews', [ReviewController::class, 'store'])
-    ->middleware('auth:sanctum');    
-Route::get('/products/{id}/reviews', [ReviewController::class, 'productReviews']);    
-
-
-Route::middleware(['auth:sanctum'])->prefix('admin/analytics')->group(function () {
-    Route::get('/sales', [AdminAnalyticsController::class, 'sales']);
-    Route::get('/orders', [AdminAnalyticsController::class, 'orders']);
-    Route::get('/vendors', [AdminAnalyticsController::class, 'vendors']);
-    Route::get('/products', [AdminAnalyticsController::class, 'products']);
-});
-
-Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
-    Route::get('/settings', [AdminSettingsController::class, 'index']);
-    Route::put('/settings', [AdminSettingsController::class, 'update']);
-});
-
-// USER
-Route::get('/orders/{id}/invoice', [OrderController::class, 'invoice'])
-    ->middleware('auth:sanctum');
-
-// ADMIN
-Route::get('/admin/orders/summary', [AdminOrderController::class, 'summary'])
-    ->middleware(['auth:sanctum']); // add admin middleware if you have
-
-// VENDOR
-Route::get('/vendor/orders/summary', [VendorOrderController::class, 'summary'])
-    ->middleware(['auth:sanctum']);
-
-    // Vendor
-Route::middleware(['auth:sanctum'])->prefix('vendor')->group(function () {
+// Vendor Dashboard & Inventory
+Route::middleware('auth:sanctum')->prefix('vendor')->group(function () {
+    Route::get('/dashboard', [VendorDashboardController::class, 'dashboard']);
+    Route::get('/dashboard/stats', [VendorDashboardController::class, 'stats']);
+    Route::get('/orders/summary', [VendorDashboardController::class, 'ordersSummary']);
     Route::get('/documents', [VendorDocumentController::class, 'index']);
     Route::post('/documents', [VendorDocumentController::class, 'store']);
+    Route::get('/inventory/{vendor_id}', [VendorInventoryController::class, 'inventory']);
+    Route::get('/products/low-stock/{vendor_id}', [VendorInventoryController::class, 'lowStock']);
 });
 
-// Admin
-Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+// Vendor CRUD routes with permission checks
+Route::middleware(['auth:sanctum', 'role:vendor'])->group(function () {
+    Route::post('/vendor/products', [VendorProductController::class, 'store'])->middleware('permission:product.create');
+    Route::put('/vendor/products/{id}', [VendorProductController::class, 'updateProduct'])->middleware('permission:product.update');
+    Route::delete('/vendor/products/{id}', [VendorProductController::class, 'deleteProduct'])->middleware('permission:product.delete');
 
-    Route::get('/vendor-documents/{id}', [AdminVendorDocumentController::class, 'show']);
+    Route::post('/vendor/products/{id}/images', [ProductImageController::class, 'store'])->middleware('permission:product.create');
+    Route::delete('/vendor/products/images/{id}', [ProductImageController::class, 'deleteProductImage'])->middleware('permission:product.delete');
 
-    Route::put('/vendors/{id}/approve', [AdminVendorController::class, 'approve']);
-    Route::put('/vendors/{id}/reject', [AdminVendorController::class, 'reject']);
+    Route::post('/vendor/products/{id}/variants', [VendorVariantController::class, 'store'])->middleware('permission:variant.create');
+    Route::put('/vendor/product-variants/{id}', [VendorVariantController::class, 'updateVariant'])->middleware('permission:variant.update');
+    Route::delete('/vendor/product-variants/{id}', [VendorVariantController::class, 'deleteVariant'])->middleware('permission:variant.delete');
+
+    Route::post('/vendor/coupons', [VendorCouponController::class, 'store'])->middleware('permission:coupon.create');
+    Route::put('/vendor/coupons/{id}', [VendorCouponController::class, 'update'])->middleware('permission:coupon.update');
+    Route::delete('/vendor/coupons/{id}', [VendorCouponController::class, 'destroy'])->middleware('permission:coupon.delete');
+
+    Route::post('/vendor/wallet/withdraw', [VendorWalletController::class, 'withdraw'])->middleware('permission:wallet.withdraw');
+    Route::post('/vendor/orders/{id}/shipment', [VendorOrderController::class, 'createShipment'])->middleware('permission:order.shipment');
+
+    Route::post('/products/{id}/questions', [ProductQuestionController::class, 'store'])->middleware('permission:question.create');
+    Route::post('/products/questions/{id}/answer', [ProductQuestionController::class, 'answer'])->middleware('permission:question.answer');
+    Route::get('/products/{id}/questions', [ProductQuestionController::class, 'index']);
 });
 
-Route::middleware(['auth:sanctum'])->prefix('vendor/dashboard')->group(function () {
+// Admin routes with permission middleware
+Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
 
-    Route::get('/stats', [VendorDashboardController::class, 'stats']);
+    // Categories
+    Route::post('/categories', [AdminCategoryController::class, 'store'])->middleware('permission:category.create');
+    Route::post('/subcategories', [AdminCategoryController::class, 'storeSubcategory'])->middleware('permission:category.create');
+    Route::put('/categories/{id}', [AdminCategoryController::class, 'updateCategory'])->middleware('permission:category.update');
+    Route::put('/subcategories/{id}', [AdminCategoryController::class, 'updateSubcategory'])->middleware('permission:category.update');
+    Route::delete('/categories/{id}', [AdminCategoryController::class, 'deleteCategory'])->middleware('permission:category.delete');
+    Route::delete('/subcategories/{id}', [AdminCategoryController::class, 'deleteSubcategory'])->middleware('permission:category.delete');
 
-    Route::get('/revenue-chart', [VendorDashboardController::class, 'revenueChart']);
+    // Attributes
+    Route::post('/attributes', [AdminAttributeController::class, 'store'])->middleware('permission:attribute.create');
+    Route::put('/attributes/{id}', [AdminAttributeController::class, 'updateAttribute'])->middleware('permission:attribute.update');
+    Route::delete('/attributes/{id}', [AdminAttributeController::class, 'deleteAttribute'])->middleware('permission:attribute.delete');
 
-});
+    Route::post('/attributes/{id}/values', [AdminAttributeValueController::class, 'store'])->middleware('permission:attribute.create');
+    Route::put('/attribute-values/{id}', [AdminAttributeValueController::class, 'updateAttributeValue'])->middleware('permission:attribute.update');
+    Route::delete('/attribute-values/{id}', [AdminAttributeValueController::class, 'deleteAttributeValue'])->middleware('permission:attribute.delete');
 
+    // Commissions
+    Route::post('/commissions', [AdminCommissionController::class, 'store'])->middleware('permission:commission.create');
+    Route::put('/vendors/{id}/commission', [AdminCommissionController::class, 'updateVendorCommission'])->middleware('permission:commission.update');
 
-Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    // Withdraw Requests
+    Route::get('/withdraw-requests', [AdminWithdrawController::class, 'getWithdrawRequests'])->middleware('permission:withdraw.view');
+    Route::get('/withdraw-requests/{id}', [AdminWithdrawController::class, 'getWithdrawRequest'])->middleware('permission:withdraw.view');
+    Route::put('/withdraw-requests/{id}/approve', [AdminWithdrawController::class, 'approve'])->middleware('permission:withdraw.approve');
+    Route::put('/withdraw-requests/{id}/reject', [AdminWithdrawController::class, 'reject'])->middleware('permission:withdraw.reject');
 
-    Route::prefix('dashboard')->group(function () {
+    // Banners
+    Route::get('/banners', [AdminBannerController::class, 'getBanners']);
+    Route::get('/banners/{id}', [AdminBannerController::class, 'getBanner']);
+    Route::post('/banners', [AdminBannerController::class, 'store'])->middleware('permission:banner.create');
+    Route::put('/banners/{id}', [AdminBannerController::class, 'updateBanner'])->middleware('permission:banner.update');
+    Route::delete('/banners/{id}', [AdminBannerController::class, 'deleteBanner'])->middleware('permission:banner.delete');
 
-        Route::get('/stats', [AdminDashboardController::class, 'stats']);
-        Route::get('/revenue-chart', [AdminDashboardController::class, 'revenueChart']);
-        Route::get('/orders-chart', [AdminDashboardController::class, 'ordersChart']);
-
+    // Analytics
+    Route::prefix('analytics')->group(function () {
+        Route::get('/sales', [AdminAnalyticsController::class, 'sales'])->middleware('permission:analytics.view');
+        Route::get('/orders', [AdminAnalyticsController::class, 'orders'])->middleware('permission:analytics.view');
+        Route::get('/vendors', [AdminAnalyticsController::class, 'vendors'])->middleware('permission:analytics.view');
+        Route::get('/products', [AdminAnalyticsController::class, 'products'])->middleware('permission:analytics.view');
     });
 
-    Route::get('/vendors/pending', [AdminDashboardController::class, 'pendingVendors']);
+    // Dashboard
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/stats', [AdminDashboardController::class, 'stats'])->middleware('permission:dashboard.view');
+        Route::get('/revenue-chart', [AdminDashboardController::class, 'revenueChart'])->middleware('permission:dashboard.view');
+        Route::get('/orders-chart', [AdminDashboardController::class, 'ordersChart'])->middleware('permission:dashboard.view');
+    });
+    Route::get('/vendors/pending', [AdminDashboardController::class, 'pendingVendors'])->middleware('permission:vendor.view');
+
+    // Reports
+    Route::prefix('reports')->group(function () {
+        Route::get('/sales', [AdminReportController::class, 'sales'])->middleware('permission:report.view');
+        Route::get('/vendor-sales', [AdminReportController::class, 'vendorSales'])->middleware('permission:report.view');
+        Route::get('/product-sales', [AdminReportController::class, 'productSales'])->middleware('permission:report.view');
+        Route::get('/customers', [AdminReportController::class, 'customers'])->middleware('permission:report.view');
+    });
+
+    // Support
+    Route::prefix('support')->group(function () {
+        Route::get('/', [AdminSupportController::class, 'index'])->middleware('permission:support.view');
+        Route::get('/{id}', [AdminSupportController::class, 'show'])->middleware('permission:support.view');
+        Route::post('/{id}/reply', [AdminSupportController::class, 'reply'])->middleware('permission:support.reply');
+        Route::patch('/{id}/status', [AdminSupportController::class, 'updateStatus'])->middleware('permission:support.update');
+    });
+
+    // Roles & Permissions
+    Route::get('/roles', [AdminRoleController::class, 'index'])->middleware('permission:role.view');
+    Route::get('/roles/{id}', [AdminRoleController::class, 'show'])->middleware('permission:role.view');
+    Route::post('/roles', [AdminRoleController::class, 'store'])->middleware('permission:role.create');
+    Route::put('/roles/{id}', [AdminRoleController::class, 'update'])->middleware('permission:role.update');
+    Route::delete('/roles/{id}', [AdminRoleController::class, 'destroy'])->middleware('permission:role.delete');
+
+    Route::get('/permissions', [AdminPermissionController::class, 'index'])->middleware('permission:permission.view');
+    Route::get('/permissions/{id}', [AdminPermissionController::class, 'show'])->middleware('permission:permission.view');
+    Route::post('/permissions', [AdminPermissionController::class, 'store'])->middleware('permission:permission.create');
+    Route::put('/permissions/{id}', [AdminPermissionController::class, 'update'])->middleware('permission:permission.update');
+    Route::delete('/permissions/{id}', [AdminPermissionController::class, 'destroy'])->middleware('permission:permission.delete');
+
+    // Users
+    Route::get('/users-with-roles', [AdminUserController::class, 'index'])->middleware('permission:user.view');
+    Route::post('/users/{id}/assign-role', [AdminUserController::class, 'assignRole'])->middleware('permission:user.assign-role');
+
+
+    //Logs
+    Route::get('/logs', [AdminLogController::class, 'index'])->middleware('permission:log.view');
 });
-
-
-Route::middleware(['auth:sanctum'])->prefix('admin/reports')->group(function () {
-
-    Route::get('/sales', [AdminReportController::class, 'sales']);
-
-    Route::get('/vendor-sales', [AdminReportController::class, 'vendorSales']);
-
-    Route::get('/product-sales', [AdminReportController::class, 'productSales']);
-
-    Route::get('/customers', [AdminReportController::class, 'customers']);
-});
-
-
-Route::prefix('support')->middleware('auth:sanctum')->group(function() {
-    Route::get('/tickets', [SupportController::class, 'index']); // list all tickets
-    Route::post('/tickets', [SupportController::class, 'store']); // view ticket
-    Route::get('/tickets/{id}', [SupportController::class, 'show']); // admin reply
-    Route::post('/tickets/{id}/reply', [SupportController::class, 'reply']); // change status
-});
-
-Route::prefix('admin/support')->middleware(['auth:sanctum', 'role:admin'])->group(function() {
-    Route::get('/', [AdminSupportController::class, 'index']); // list all tickets
-    Route::get('/{id}', [AdminSupportController::class, 'show']); // view ticket
-    Route::post('/{id}/reply', [AdminSupportController::class, 'reply']); // admin reply
-    Route::patch('/{id}/status', [AdminSupportController::class, 'updateStatus']); // change status
-});
-
-
-Route::prefix('admin/permissions')->group(function () {
-    Route::get('/', [AdminPermissionController::class, 'index']);
-    Route::post('/', [AdminPermissionController::class, 'store']);
-    Route::put('/{id}', [AdminPermissionController::class, 'update']);
-    Route::delete('/{id}', [AdminPermissionController::class, 'destroy']);
-});
-
-Route::prefix('admin/roles')->group(function () {
-
-    Route::get('/', [AdminRoleController::class, 'index']);
-    Route::post('/', [AdminRoleController::class, 'store']);
-    Route::put('/{id}', [AdminRoleController::class, 'update']);
-    Route::delete('/{id}', [AdminRoleController::class, 'destroy']);
-
-    // 🔥 RBAC core
-    Route::post('/{id}/permissions', [AdminRoleController::class, 'assignPermissions']);
-    Route::get('/{id}/permissions', [AdminRoleController::class, 'getRolePermissions']);
-
-});
-
-Route::prefix('admin/users')->group(function () {
-
-    Route::post('/{userId}/roles', [UserRoleController::class, 'assignRoles']);
-    Route::get('/{userId}/roles', [UserRoleController::class, 'getUserRoles']);
-
-});
-
-Route::get('/admin/users/{id}/permissions', [AdminPermissionController::class, 'getUserPermissions'])
-    ->middleware(['auth:sanctum']);

@@ -28,3 +28,4 @@ public function up()
         Schema::dropIfExists('order_status_histories');
     }
 };
+ 
