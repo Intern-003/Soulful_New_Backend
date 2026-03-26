@@ -54,7 +54,7 @@ Route::post('auth/login', [AuthController::class, 'login']);
 Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
 
-Route::get('profiles', [ProfileController::class, 'getProfiles']);
+
 Route::get('profile/{id}', [ProfileController::class, 'getProfileById']);
 Route::get('addresses', [AddressController::class, 'getAddresses']);
 Route::get('carts', [CartController::class, 'getCarts']);
@@ -109,11 +109,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::post('auth/refresh-token', [AuthController::class, 'refreshToken']);
     Route::get('auth/me', [AuthController::class, 'me']);
-    Route::get('profile', [AuthController::class, 'profile']);
-    Route::put('profile/update', [AuthController::class, 'updateProfile']);
+    Route::get('profile', [ProfileController::class, 'getProfile']);
+    Route::put('profile/update', [ProfileController::class, 'updateProfile']);
     Route::put('profile/change-password', [AuthController::class, 'changePassword']);
-    Route::post('profile/avatar', [AuthController::class, 'uploadAvatar']);
-    Route::delete('profile/avatar', [AuthController::class, 'deleteAvatar']);
+    Route::post('profile/avatar', [ProfileController::class, 'uploadAvatar']);
+    Route::delete('profile/avatar', [ProfileController::class, 'deleteAvatar']);
     Route::post('auth/verify-email', [AuthController::class, 'verifyEmail']);
 
     // Address CRUD
@@ -194,7 +194,8 @@ Route::middleware('auth:sanctum')->prefix('vendor')->group(function () {
 });
 
 // Vendor CRUD routes with permission checks
-Route::middleware(['auth:sanctum', 'role:vendor'])->group(function () {
+//Route::middleware(['auth:sanctum', 'role:vendor'])->group(function () {
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/vendor/products', [VendorProductController::class, 'store'])->middleware('permission:product.create');
     Route::put('/vendor/products/{id}', [VendorProductController::class, 'updateProduct'])->middleware('permission:product.update');
     Route::delete('/vendor/products/{id}', [VendorProductController::class, 'deleteProduct'])->middleware('permission:product.delete');
@@ -219,7 +220,7 @@ Route::middleware(['auth:sanctum', 'role:vendor'])->group(function () {
 });
 
 // Admin routes with permission middleware
-Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
 
     // Categories
     Route::post('/categories', [AdminCategoryController::class, 'store'])->middleware('permission:category.create');
@@ -307,4 +308,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
 
     //Logs
     Route::get('/logs', [AdminLogController::class, 'index'])->middleware('permission:log.view');
+
+    //List Profiles
+    Route::get('/users/profiles', [ProfileController::class, 'getProfiles'])->middleware('permission:profiles.view');
 });
