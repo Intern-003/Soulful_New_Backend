@@ -22,7 +22,6 @@ class User extends Authenticatable implements MustVerifyEmail
         'phone',
         'role_id',          // foreign key to Role
         'status',           // account status
-        'avatar',
         'email_verified_at',
         'last_login_at',
     ];
@@ -52,6 +51,10 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsTo(Role::class);
     }
 
+    public function profile()
+{
+    return $this->hasOne(UserProfile::class);
+}
     // ----------------------------
     // Relationship: User has one Vendor (if role = vendor)
     // ----------------------------
