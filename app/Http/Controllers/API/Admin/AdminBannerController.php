@@ -153,4 +153,4 @@ public function updateBanner(Request $request, $id)
 }
 
 
-}
+}                                                     

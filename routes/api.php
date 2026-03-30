@@ -218,6 +218,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/products/questions/{id}/answer', [ProductQuestionController::class, 'answer'])->middleware('permission:question.answer');
     Route::get('/products/{id}/questions', [ProductQuestionController::class, 'index']);
 });
+    Route::get('admin/banners', [AdminBannerController::class, 'getBanners']);
 
 // Admin routes with permission middleware
 Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
@@ -250,7 +251,6 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     Route::put('/withdraw-requests/{id}/reject', [AdminWithdrawController::class, 'reject'])->middleware('permission:withdraw.reject');
 
     // Banners
-    Route::get('/banners', [AdminBannerController::class, 'getBanners']);
     Route::get('/banners/{id}', [AdminBannerController::class, 'getBanner']);
     Route::post('/banners', [AdminBannerController::class, 'store'])->middleware('permission:banner.create');
     Route::put('/banners/{id}', [AdminBannerController::class, 'updateBanner'])->middleware('permission:banner.update');
