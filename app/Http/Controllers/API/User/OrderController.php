@@ -43,10 +43,12 @@ class OrderController extends Controller
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
 
+
         return response()->json([
             'success' => true,
             'data' => $order
         ]);
+
     }
 
 
@@ -93,33 +95,33 @@ class OrderController extends Controller
 
 
     // GET /orders/{id}/invoice
-public function invoice(Request $request, $id)
-{
-    //dd($id);
-    $order = Order::with([
-        'items.product',
-        'items.vendor',
-        'address'
-    ])
-    ->where('user_id', $request->user()->id)
-    ->findOrFail($id);
+    public function invoice(Request $request, $id)
+    {
+        //dd($id);
+        $order = Order::with([
+            'items.product',
+            'items.vendor',
+            'address'
+        ])
+            ->where('user_id', $request->user()->id)
+            ->findOrFail($id);
 
-    return response()->json([
-        'success' => true,
-        'data' => [
-            'order_number' => $order->order_number,
-            'date' => $order->created_at,
-            'customer' => $order->user->name ?? null,
-            'address' => $order->address,
-            'items' => $order->items,
-            'subtotal' => $order->subtotal,
-            'tax' => $order->tax,
-            'shipping' => $order->shipping_cost,
-            'total' => $order->total,
-            'status' => $order->order_status
-        ]
-    ]);
-}
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'order_number' => $order->order_number,
+                'date' => $order->created_at,
+                'customer' => $order->user->name ?? null,
+                'address' => $order->address,
+                'items' => $order->items,
+                'subtotal' => $order->subtotal,
+                'tax' => $order->tax,
+                'shipping' => $order->shipping_cost,
+                'total' => $order->total,
+                'status' => $order->order_status
+            ]
+        ]);
+    }
 
     public function store(Request $request)
     {
@@ -314,16 +316,16 @@ public function invoice(Request $request, $id)
     }
 
 
-public function statusHistory(Request $request, $id)
-{
-    $order = Order::where('user_id', $request->user()->id)
-        ->with('statusHistory')
-        ->findOrFail($id);
+    public function statusHistory(Request $request, $id)
+    {
+        $order = Order::where('user_id', $request->user()->id)
+            ->with('statusHistory')
+            ->findOrFail($id);
 
-    return response()->json([
-        'success' => true,
-        'data' => $order->statusHistory
-    ]);
-}
+        return response()->json([
+            'success' => true,
+            'data' => $order->statusHistory
+        ]);
+    }
 
 }
