@@ -193,14 +193,14 @@ public function updateProduct(Request $request, $id)
     $user = Auth::user();
 
     // ✅ Ownership check (admin bypass optional)
-    if (!isset($user->is_admin) || !$user->is_admin) {
-        if ($product->vendor_id !== $user->vendor_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-    }
+    // if (!isset($user->is_admin) || !$user->is_admin) {
+    //     if ($product->vendor_id !== $user->vendor_id) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Unauthorized'
+    //         ], 403);
+    //     }
+    // }
 
     // ✅ Validation (partial updates allowed)
     $request->validate([

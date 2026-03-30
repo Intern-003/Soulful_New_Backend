@@ -3,34 +3,38 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use App\Models\Role;
+use App\Models\Permission;
 
 class RolePermissionSeeder extends Seeder
 {
     public function run()
     {
-        // Admin gets all permissions (1-10)
-        for ($i = 1; $i <= 10; $i++) {
-            DB::table('role_permissions')->insert([
-                'role_id' => 1,
-                'permission_id' => $i,
-                // Remove created_at and updated_at
-            ]);
-        }
+        $admin = Role::where('name', 'admin')->first();
+        $user = Role::where('name', 'user')->first();
+        $vendor = Role::where('name', 'vendor')->first();
 
-        // User permissions (1,5)
-        DB::table('role_permissions')->insert([
-            ['role_id' => 2, 'permission_id' => 1],
-            ['role_id' => 2, 'permission_id' => 5],
-        ]);
+        // Get all permissions
+        $allPermissions = Permission::pluck('id');
 
-        // Vendor permissions (1,2,3,5,6)
-        $vendorPermissions = [1, 2, 3, 5, 6];
-        foreach ($vendorPermissions as $permId) {
-            DB::table('role_permissions')->insert([
-                'role_id' => 3,
-                'permission_id' => $permId,
-            ]);
-        }
+        // Admin → all permissions
+        $admin->permissions()->sync($allPermissions);
+
+        // User → limited permissions
+        $userPermissions = Permission::whereIn('name', [
+            'view_products',
+            'place_orders'
+        ])->pluck('id');
+
+        $user->permissions()->sync($userPermissions);
+
+        // Vendor → specific permissions
+        $vendorPermissions = Permission::whereIn('name', [
+            'manage_products',
+            'view_orders',
+            'manage_inventory'
+        ])->pluck('id');
+
+        $vendor->permissions()->sync($vendorPermissions);
     }
 }

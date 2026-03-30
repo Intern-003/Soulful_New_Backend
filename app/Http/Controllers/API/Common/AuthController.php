@@ -45,38 +45,58 @@ class AuthController extends Controller
     // Login
     // ----------------------------
     public function login(Request $request)
-{
-    $request->validate([
-        'email' => 'required|email',
-        'password' => 'required|string',
-    ]);
-
-    $user = User::where('email', $request->email)->first();
-
-    if (!$user || !Hash::check($request->password, $user->password)) {
-        throw ValidationException::withMessages([
-            'email' => ['Invalid credentials.'],
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
         ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            throw ValidationException::withMessages([
+                'email' => ['Invalid credentials.'],
+            ]);
+        }
+
+        if (!$user->status) {
+            return response()->json(['message' => 'Account disabled'], 403);
+        }
+
+        // ✅ remove old tokens (BEST PRACTICE)
+        $user->tokens()->delete();
+
+        $user->last_login_at = now();
+        $user->save();
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+        // Load role + permissions
+        $user->load('role.permissions');
+
+        // Transform permissions
+        $permissions = $user->role
+            ? $user->role->permissions->map(function ($permission) {
+                return [
+                    'module' => $permission->module,
+                    'action' => $permission->action,
+                ];
+            })
+            : collect();
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ],
+            'role' => $user->role->name ?? null,
+            'permissions' => $permissions,
+            'access_token' => $token,
+            'token_type' => 'Bearer'
+        ]);
+
     }
-
-    if (!$user->status) {
-        return response()->json(['message' => 'Account disabled'], 403);
-    }
-
-    // ✅ remove old tokens (BEST PRACTICE)
-    $user->tokens()->delete();
-
-    $user->last_login_at = now();
-    $user->save();
-
-    $token = $user->createToken('auth_token')->plainTextToken;
-
-    return response()->json([
-        'user' => $user,
-        'access_token' => $token,
-        'token_type' => 'Bearer'
-    ]);
-}
 
     // ----------------------------
     // Logout
@@ -91,26 +111,32 @@ class AuthController extends Controller
     // Refresh Token
     // ----------------------------
     public function refreshToken(Request $request)
-{
-    $user = $request->user();
+    {
+        $user = $request->user();
 
-    $currentToken = $request->user()->currentAccessToken();
-    if ($currentToken()->created_at->lt(now()->subDays(7))) {
-    return response()->json(['message' => 'Token expired'], 401);
-}
+        // $currentToken = $request->user()->currentAccessToken();
+        // if ($currentToken()->created_at->lt(now()->subDays(7))) {
+        //     return response()->json(['message' => 'Token expired'], 401);
+        // }
 
-    // delete ONLY current token
-    $currentToken()->delete();
+        $currentToken = $request->user()->currentAccessToken();
 
-    // create new token
-    $newToken = $user->createToken('auth_token')->plainTextToken;
+        if ($currentToken->created_at->lt(now()->subDays(7))) {
+            return response()->json(['message' => 'Token expired'], 401);
+        }
+
+        // delete ONLY current token
+        $currentToken()->delete();
+
+        // create new token
+        $newToken = $user->createToken('auth_token')->plainTextToken;
 
 
-    return response()->json([
-        'access_token' => $newToken,
-        'token_type' => 'Bearer'
-    ]);
-}
+        return response()->json([
+            'access_token' => $newToken,
+            'token_type' => 'Bearer'
+        ]);
+    }
     // ----------------------------
     // Me
     // ----------------------------
@@ -165,30 +191,30 @@ class AuthController extends Controller
     }
 
     public function changePassword(Request $request)
-{
-    $request->validate([
-        'current_password' => 'required',
-        'new_password' => 'required|min:6|confirmed',
-    ]);
+    {
+        $request->validate([
+            'current_password' => 'required',
+            'new_password' => 'required|min:6|confirmed',
+        ]);
 
-    $user = $request->user();
+        $user = $request->user();
 
-    // check current password
-    if (!Hash::check($request->current_password, $user->password)) {
+        // check current password
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'message' => 'Current password is incorrect'
+            ], 400);
+        }
+
+        // update password
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        // 🔥 logout all devices after password change
+        $user->tokens()->delete();
+
         return response()->json([
-            'message' => 'Current password is incorrect'
-        ], 400);
+            'message' => 'Password changed successfully. Please login again.'
+        ]);
     }
-
-    // update password
-    $user->password = Hash::make($request->new_password);
-    $user->save();
-
-    // 🔥 logout all devices after password change
-    $user->tokens()->delete();
-
-    return response()->json([
-        'message' => 'Password changed successfully. Please login again.'
-    ]);
-}
 }
