@@ -3,17 +3,32 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        // Drop existing role_id column (and any broken FK)
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('role_id');
-        });
+        // ✅ Step 1: Drop foreign key safely (if exists)
+        try {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropForeign(['role_id']);
+            });
+        } catch (\Exception $e) {
+            // fallback: drop by constraint name if needed
+            try {
+                DB::statement('ALTER TABLE users DROP FOREIGN KEY users_role_id_foreign');
+            } catch (\Exception $e) {}
+        }
 
-        // Add new role_id column with correct FK
+        // ✅ Step 2: Drop column safely
+        if (Schema::hasColumn('users', 'role_id')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('role_id');
+            });
+        }
+
+        // ✅ Step 3: Recreate column with correct FK
         Schema::table('users', function (Blueprint $table) {
             $table->foreignId('role_id')
                 ->nullable()
@@ -24,17 +39,27 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Drop the new column
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropForeign(['role_id']);
-            $table->dropColumn('role_id');
-        });
+        // ✅ Step 1: Drop FK
+        try {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropForeign(['role_id']);
+            });
+        } catch (\Exception $e) {
+            try {
+                DB::statement('ALTER TABLE users DROP FOREIGN KEY users_role_id_foreign');
+            } catch (\Exception $e) {}
+        }
 
-        // Recreate old column (if needed)
+        // ✅ Step 2: Drop column
+        if (Schema::hasColumn('users', 'role_id')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('role_id');
+            });
+        }
+
+        // ✅ Step 3: Recreate basic column (no FK)
         Schema::table('users', function (Blueprint $table) {
-            $table->unsignedBigInteger('role_id');
-            // old FK or constraints can be ignored
+            $table->unsignedBigInteger('role_id')->nullable();
         });
     }
-
 };
