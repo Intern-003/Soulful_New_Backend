@@ -82,15 +82,15 @@ foreach ($request->attribute_value_ids as $valueId) {
     $user = Auth::user();
 
     // ✅ Admin bypass (adjust if needed)
-    if (!isset($user->is_admin) || !$user->is_admin) {
-        // ✅ Vendor ownership check
-        if ($product->vendor_id !== $user->vendor_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized to delete this variant'
-            ], 403);
-        }
-    }
+    // if (!isset($user->is_admin) || !$user->is_admin) {
+    //     // ✅ Vendor ownership check
+    //     if ($product->vendor_id !== $user->vendor_id) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Unauthorized to delete this variant'
+    //         ], 403);
+    //     }
+    // }
 
     // Delete image if exists
     if ($variant->image) {
