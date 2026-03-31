@@ -197,6 +197,7 @@ Route::middleware('auth:sanctum')->prefix('vendor')->group(function () {
 //Route::middleware(['auth:sanctum', 'role:vendor'])->group(function () {
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/vendor/products', [VendorProductController::class, 'store'])->middleware('permission:product.create');
+     Route::get('vendor/products/{id}', [VendorProductController::class, 'getProductById'])->middleware('permission:product.show');
     Route::put('/vendor/products/{id}', [VendorProductController::class, 'updateProduct'])->middleware('permission:product.update');
     Route::delete('/vendor/products/{id}', [VendorProductController::class, 'deleteProduct'])->middleware('permission:product.delete');
 
