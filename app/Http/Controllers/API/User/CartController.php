@@ -12,32 +12,18 @@ use Illuminate\Support\Facades\Auth;
 class CartController extends Controller
 {
     /**
-     * Get user or guest cart with totals
+     * 🔁 Common method to return full cart response
      */
-    public function getCart(Request $request)
+    private function formatCartResponse($cart, $guestToken = null)
     {
-        $user = Auth::guard('sanctum')->user();
-        
-        $guestToken = $request->header('Guest-Token');
-
-        if (!$user && !$guestToken) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User or Guest token required'
-            ], 400);
-        }
-
-        $cart = Cart::with('items.product', 'items.variant')
-            ->when($user, fn($q) => $q->where('user_id', $user->id))
-            ->when(!$user && $guestToken, fn($q) => $q->where('guest_token', $guestToken))
-            ->first();
-
-        if (!$cart) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cart is empty'
-            ]);
-        }
+        // $cart = $cart->fresh([
+        //     'items.product.images',
+        //     'items.variant'
+        // ]);
+        $cart->loadMissing([
+    'items.product.images',
+    'items.variant'
+]);
 
         $totals = $this->calculateTotals($cart);
 
@@ -47,12 +33,56 @@ class CartController extends Controller
                 'cart' => $cart,
                 'totals' => $totals
             ],
-            'guest_token' => $user ? null : $guestToken // Only for guest users
+            'guest_token' => $guestToken
         ]);
     }
 
     /**
-     * Add product to cart (guest or logged-in user)
+     * 🛒 GET CART
+     */
+    public function getCart(Request $request)
+    {
+        $user = Auth::guard('sanctum')->user();
+        $guestToken = $request->header('Guest-Token');
+
+        // if (!$user && !$guestToken) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'User or Guest token required'
+        //     ], 400);
+        // }
+       if (!$user && !$guestToken) {
+    $guestToken = bin2hex(random_bytes(16));
+
+    // ✅ CREATE CART IMMEDIATELY
+    $cart = Cart::create([
+        'guest_token' => $guestToken
+    ]);
+
+    return $this->formatCartResponse($cart, $guestToken);
+}
+
+        $cart = Cart::with(['items.product.images', 'items.variant'])
+            ->when($user, fn($q) => $q->where('user_id', $user->id))
+            ->when(!$user && $guestToken, fn($q) => $q->where('guest_token', $guestToken))
+            ->first();
+
+        if (!$cart) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'cart' => ['items' => []],
+                    'totals' => $this->emptyTotals()
+                ],
+                'guest_token' => $guestToken
+            ]);
+        }
+
+        return $this->formatCartResponse($cart, $user ? null : $guestToken);
+    }
+
+    /**
+     * ➕ ADD TO CART
      */
     public function addToCart(Request $request)
     {
@@ -62,38 +92,31 @@ class CartController extends Controller
             'quantity' => 'required|integer|min:1'
         ]);
 
-
-        $user = Auth::guard('sanctum')->user(); // manually check for authenticated user
-
-        //dd($user);
+        $user = Auth::guard('sanctum')->user();
         $guestToken = $request->header('Guest-Token');
 
-        // ✅ Logged-in user
         if ($user) {
             $cart = Cart::firstOrCreate(['user_id' => $user->id]);
 
-            // Merge guest cart if guest token exists
             if ($guestToken) {
                 $this->mergeGuestCart($guestToken, $cart);
-                $cart->user_id = $user->id;
-                $cart->guest_token = null;
-                $cart->touch(); // updates updated_at
+                $cart->update([
+                    'user_id' => $user->id,
+                    'guest_token' => null
+                ]);
             }
 
-            $guestToken = null; // remove guest token in response
-        }
-        // ✅ Guest user
-        else {
+            $guestToken = null;
+        } else {
             if (!$guestToken) {
-                $guestToken = bin2hex(random_bytes(16)); // generate new token
+                $guestToken = bin2hex(random_bytes(16));
             }
+
             $cart = Cart::firstOrCreate(['guest_token' => $guestToken]);
         }
 
-        // Get product
         $product = Product::findOrFail($request->product_id);
 
-        // Check if item already exists
         $item = CartItem::where([
             'cart_id' => $cart->id,
             'product_id' => $request->product_id,
@@ -102,10 +125,9 @@ class CartController extends Controller
 
         if ($item) {
             $item->quantity += $request->quantity;
-            $item->touch();
             $item->save();
         } else {
-            $item = CartItem::create([
+            CartItem::create([
                 'cart_id' => $cart->id,
                 'product_id' => $request->product_id,
                 'variant_id' => $request->variant_id,
@@ -114,29 +136,123 @@ class CartController extends Controller
             ]);
         }
 
-        $cart->update([
-            'coupon_id' => null,
-            'discount_amount' => 0
+        return $this->formatCartResponse($cart, $guestToken);
+    }
+
+    /**
+     * 🔄 UPDATE CART ITEM
+     */
+    public function updateCartItem(Request $request, $id)
+    {
+        $request->validate([
+            'quantity' => 'required|integer|min:1'
         ]);
 
-        $totals = $this->calculateTotals($cart->fresh('items.product'));
+        $user = Auth::guard('sanctum')->user();
+        $guestToken = $request->header('Guest-Token');
+
+        $cartItem = CartItem::where('id', $id)
+            ->whereHas('cart', function ($q) use ($user, $guestToken) {
+                if ($user) {
+                    $q->where('user_id', $user->id);
+                } elseif ($guestToken) {
+                    $q->where('guest_token', $guestToken);
+                }
+            })
+            ->firstOrFail();
+
+        $cartItem->update(['quantity' => $request->quantity]);
+
+        $cart = $cartItem->cart;
+
+        return $this->formatCartResponse($cart, $guestToken);
+    }
+
+    /**
+     * ❌ REMOVE ITEM
+     */
+    public function deleteCartItem(Request $request, $id)
+    {
+        $user = Auth::guard('sanctum')->user();
+        $guestToken = $request->header('Guest-Token');
+
+        $cartItem = CartItem::where('id', $id)
+            ->whereHas('cart', function ($q) use ($user, $guestToken) {
+                if ($user) {
+                    $q->where('user_id', $user->id);
+                } elseif ($guestToken) {
+                    $q->where('guest_token', $guestToken);
+                }
+            })
+            ->firstOrFail();
+
+        $cart = $cartItem->cart;
+
+        $cartItem->delete();
+
+        return $this->formatCartResponse($cart, $guestToken);
+    }
+
+    /**
+     * 🧹 CLEAR CART
+     */
+    public function clearCart(Request $request)
+    {
+        $user = Auth::guard('sanctum')->user();
+        $guestToken = $request->header('Guest-Token');
+
+        $cart = Cart::when($user, fn($q) => $q->where('user_id', $user->id))
+            ->when(!$user && $guestToken, fn($q) => $q->where('guest_token', $guestToken))
+            ->first();
+
+        if ($cart) {
+            $cart->items()->delete();
+            $cart->delete();
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Product added to cart',
-            'data' => $item,
-            'totals' => $totals,
-            'guest_token' => $guestToken // Only non-null for guest users
+            'data' => [
+                'cart' => ['items' => []],
+                'totals' => $this->emptyTotals()
+            ],
+            'guest_token' => $guestToken
         ]);
     }
 
     /**
-     * Merge guest cart into logged-in user's cart
+     * 🧮 TOTALS
+     */
+    protected function calculateTotals(Cart $cart)
+    {
+        $subtotal = $cart->items->sum(fn($item) => $item->price * $item->quantity);
+        $shipping = 50;
+        $discount = $cart->discount_amount ?? 0;
+
+        return [
+            'subtotal' => $subtotal,
+            'shipping' => $shipping,
+            'discount' => $discount,
+            'total' => $subtotal + $shipping - $discount
+        ];
+    }
+
+    protected function emptyTotals()
+    {
+        return [
+            'subtotal' => 0,
+            'shipping' => 0,
+            'discount' => 0,
+            'total' => 0
+        ];
+    }
+
+    /**
+     * 🔁 MERGE GUEST CART
      */
     public function mergeGuestCart($guestToken, Cart $userCart)
     {
-        $guestCart = Cart::with('items')
-            ->where('guest_token', $guestToken)
-            ->first();
+        $guestCart = Cart::with('items')->where('guest_token', $guestToken)->first();
 
         if (!$guestCart)
             return;
@@ -160,141 +276,7 @@ class CartController extends Controller
             }
         }
 
-        // Delete guest cart
         $guestCart->items()->delete();
         $guestCart->delete();
-
-        $userCart->update([
-            'coupon_id' => null,
-            'discount_amount' => 0
-        ]);
-    }
-
-    /**
-     * Calculate cart totals
-     */
-    protected function calculateTotals(Cart $cart)
-    {
-        $subtotal = $cart->items->sum(fn($item) => $item->price * $item->quantity);
-        $shipping = 50;
-
-        $discount = $cart->discount_amount ?? 0;
-
-        return [
-            'subtotal' => $subtotal,
-            'shipping' => $shipping,
-            'discount' => $discount,
-            'total' => $subtotal + $shipping - $discount
-        ];
-    }
-
-    public function clearCart(Request $request)
-    {
-        //dd("called");
-        //$user = $request->user();
-        $user = Auth::guard('sanctum')->user();
-        //dd($user);
-        $guestToken = $request->header('Guest-Token');
-
-        $cart = Cart::when($user, fn($q) => $q->where('user_id', $user->id))
-            ->when(!$user && $guestToken, fn($q) => $q->where('guest_token', $guestToken))
-            ->first();
-
-        if (!$cart) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cart is already empty'
-            ]);
-        }
-
-        $cart->items()->delete();
-        $cart->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Cart cleared'
-        ]);
-    }
-    public function deleteCartItem(Request $request, $id)
-    {
-        $user = Auth::guard('sanctum')->user();
-        ;
-        $guestToken = $request->header('Guest-Token');
-
-        $cartItem = CartItem::where('id', $id)
-            ->whereHas('cart', function ($q) use ($user, $guestToken) {
-                if ($user) {
-                    $q->where('user_id', $user->id);
-                } elseif ($guestToken) {
-                    $q->where('guest_token', $guestToken);
-                }
-            })
-            ->first();
-
-        if (!$cartItem) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cart item not found'
-            ], 404);
-        }
-
-        $cart = $cartItem->cart;
-
-        $cartItem->delete();
-
-        $cart->update([
-            'coupon_id' => null,
-            'discount_amount' => 0
-        ]);
-
-        $totals = $this->calculateTotals($cart->fresh('items.product'));
-        return response()->json([
-            'success' => true,
-            'message' => 'Cart item deleted',
-            'totals' => $totals
-        ]);
-    }
-    public function updateCartItem(Request $request, $id)
-    {
-        $request->validate([
-            'quantity' => 'required|integer|min:1'
-        ]);
-
-        $user = Auth::guard('sanctum')->user();
-        $guestToken = $request->header('Guest-Token');
-
-        // Find cart item for user or guest
-        $cartItem = CartItem::where('id', $id)
-            ->whereHas('cart', function ($q) use ($user, $guestToken) {
-                if ($user) {
-                    $q->where('user_id', $user->id);
-                } elseif ($guestToken) {
-                    $q->where('guest_token', $guestToken);
-                }
-            })
-            ->first();
-
-        if (!$cartItem) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cart item not found'
-            ], 404);
-        }
-
-        $cartItem->quantity = $request->quantity;
-        $cartItem->save();
-        $cart = $cartItem->cart;
-        $cart->update([
-            'coupon_id' => null,
-            'discount_amount' => 0
-        ]);
-
-        $totals = $this->calculateTotals($cart->fresh('items.product'));
-        return response()->json([
-            'success' => true,
-            'message' => 'Cart item updated',
-            'data' => $cartItem,
-            'totals' => $totals
-        ]);
     }
 }
