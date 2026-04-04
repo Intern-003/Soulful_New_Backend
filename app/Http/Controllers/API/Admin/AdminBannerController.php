@@ -128,6 +128,7 @@ public function updateBanner(Request $request, $id)
         'status'
     ]);
 
+    
     // ✅ Handle image update
     if ($request->has('image')) {
 

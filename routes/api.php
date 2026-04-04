@@ -350,7 +350,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/logs', [AdminLogController::class, 'index'])->middleware('permission:log.view');
     });
 });
-
+Route::get('/admin/attributes-with-values', [AdminAttributeController::class, 'indexWithValues']);
 // ==================== HEALTH CHECK (No permission required) ====================
 Route::get('/health', function () {
     return response()->json(['status' => 'ok', 'timestamp' => now()]);
