@@ -67,34 +67,35 @@ Route::get('carts', [CartController::class, 'getCarts'])->middleware('permission
 Route::get('wishlists', [WishlistController::class, 'getWishlists'])->middleware('permission:wishlist.view');
 
 // ==================== CART ROUTES (With cart permissions) ====================
-Route::post('/cart/add', [CartController::class, 'addToCart'])->middleware('permission:cart.create');
-Route::get('/cart', [CartController::class, 'getCart'])->middleware('permission:cart.view');
-Route::put('/cart/{id}', [CartController::class, 'updateCartItem'])->middleware('permission:cart.update');
-Route::delete('/cart-item/{id}', [CartController::class, 'deleteCartItem'])->middleware('permission:cart.delete');
-Route::delete('/cart/clear', [CartController::class, 'clearCart'])->middleware('permission:cart.delete');
+Route::post('/cart/add', [CartController::class, 'addToCart']);
+Route::get('/cart', [CartController::class, 'getCart']);
+Route::put('/cart/{id}', [CartController::class, 'updateCartItem']);
+Route::delete('/cart-item/{id}', [CartController::class, 'deleteCartItem']);
+Route::delete('/cart/clear', [CartController::class, 'clearCart']);
 
 // ==================== CATEGORY ROUTES (With category permissions) ====================
 Route::prefix('categories')->group(function () {
-    Route::get('/', [CategoryController::class, 'index'])->middleware('permission:category.view');
-    Route::get('/{id}', [CategoryController::class, 'show'])->middleware('permission:category.view');
-    Route::get('/{id}/children', [CategoryController::class, 'children'])->middleware('permission:category.view');
-    Route::get('/{slug}/products', [CategoryController::class, 'products'])->middleware('permission:category.view');
+    Route::get('/', [CategoryController::class, 'index']);
+    Route::get('/{id}', [CategoryController::class, 'show']);
+    Route::get('/{id}/children', [CategoryController::class, 'children']);
+    Route::get('/{slug}/products', [CategoryController::class, 'products']);
 });
 
 // ==================== PRODUCT ROUTES (With product permissions) ====================
 Route::prefix('products')->group(function () {
-    Route::get('/search', [ProductController::class, 'search'])->middleware('permission:product.view');
-    Route::get('/featured', [ProductController::class, 'featured'])->middleware('permission:product.view');
-    Route::get('/latest', [ProductController::class, 'latest'])->middleware('permission:product.view');
-    Route::get('/deals', [ProductController::class, 'deals'])->middleware('permission:product.view');
-    Route::get('/best-sellers', [ProductController::class, 'bestSellers'])->middleware('permission:product.view');
-    Route::get('/', [ProductController::class, 'index'])->middleware('permission:product.view');
-    Route::get('/{id}/related', [ProductController::class, 'related'])->middleware('permission:product.view');
-    Route::get('/{id}/images', [ProductController::class, 'images'])->middleware('permission:product.view');
-    Route::get('/{id}/reviews', [ProductController::class, 'reviews'])->middleware('permission:product.view');
-    Route::get('/{id}/rating', [ProductController::class, 'rating'])->middleware('permission:product.view');
-    Route::get('/{slug}', [ProductController::class, 'show'])->middleware('permission:product.view');
+    Route::get('/search', [ProductController::class, 'search']);
+    Route::get('/featured', [ProductController::class, 'featured']);
+    Route::get('/latest', [ProductController::class, 'latest']);
+    Route::get('/deals', [ProductController::class, 'deals']);
+    Route::get('/best-sellers', [ProductController::class, 'bestSellers']);
+    Route::get('/', [ProductController::class, 'index']);
+    Route::get('/{id}/related', [ProductController::class, 'related']);
+    Route::get('/{id}/images', [ProductController::class, 'images']);
+    Route::get('/{id}/reviews', [ProductController::class, 'reviews']);
+    Route::get('/{id}/rating', [ProductController::class, 'rating']);
+    Route::get('/{slug}', [ProductController::class, 'show']);
 });
+
 
 // ==================== VENDOR STORE ROUTES (With vendor view permissions) ====================
 Route::prefix('vendors')->group(function () {
@@ -112,7 +113,7 @@ Route::post('/coupon/validate', [CouponController::class, 'validateCoupon'])->mi
 Route::post('/vendor/register', [VendorRegisterController::class, 'register']);
 
 // ==================== ADMIN BANNERS PUBLIC VIEW ====================
-Route::get('admin/banners', [AdminBannerController::class, 'getBanners'])->middleware('permission:banner.view');
+Route::get('admin/banners', [AdminBannerController::class, 'getBanners']);
 
 // ==================== AUTHENTICATED ROUTES (All require auth:sanctum + permissions) ====================
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -136,15 +137,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/addresses/{id}/default', [AddressController::class, 'setDefaultAddress'])->middleware('permission:address.update');
 
     // ==================== WISHLIST (With wishlist permissions) ====================
-    Route::get('wishlist', [WishlistController::class, 'getWishlist'])->middleware('permission:wishlist.view');
-    Route::post('/wishlist', [WishlistController::class, 'store'])->middleware('permission:wishlist.create');
-    Route::delete('wishlist/{id}', [WishlistController::class, 'remove'])->middleware('permission:wishlist.delete');
-
+    Route::get('wishlist', [WishlistController::class, 'getWishlist']);
+    Route::post('/wishlist', [WishlistController::class, 'store']);
+    Route::delete('wishlist/{id}', [WishlistController::class, 'remove']);
     // ==================== CHECKOUT & ORDERS (With order permissions) ====================
-    Route::get('/checkout/summary', [CheckoutController::class, 'summary'])->middleware('permission:checkout.view');
-    Route::get('/checkout/data', [CheckoutController::class, 'data'])->middleware('permission:checkout.view');
-    Route::post('/checkout/validate', [CheckoutController::class, 'validateCheckout'])->middleware('permission:checkout.create');
-    Route::post('/place-order', [CheckoutController::class, 'checkout'])->middleware('permission:order.create');
+    Route::get('/checkout/summary', [CheckoutController::class, 'summary']);
+    Route::get('/checkout/data', [CheckoutController::class, 'data']);
+    Route::post('/checkout/validate', [CheckoutController::class, 'validateCheckout']);
+    Route::post('/place-order', [CheckoutController::class, 'checkout']);
 
     Route::prefix('orders')->group(function () {
         Route::get('/', [OrderController::class, 'index'])->middleware('permission:order.view');
@@ -266,7 +266,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::put('/withdraw-requests/{id}/reject', [AdminWithdrawController::class, 'reject'])->middleware('permission:withdraw.reject');
 
         // Admin Banner Management
-        Route::get('/banners/{id}', [AdminBannerController::class, 'getBanner'])->middleware('permission:banner.view');
+        Route::get('/banners/{id}', [AdminBannerController::class, 'getBanner']);
         Route::post('/banners', [AdminBannerController::class, 'store'])->middleware('permission:banner.create');
         Route::put('/banners/{id}', [AdminBannerController::class, 'updateBanner'])->middleware('permission:banner.update');
         Route::delete('/banners/{id}', [AdminBannerController::class, 'deleteBanner'])->middleware('permission:banner.delete');
