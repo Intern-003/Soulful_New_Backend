@@ -103,4 +103,19 @@ public function updateAttribute(Request $request, $id)
     ]);
 }
 
+public function indexWithValues()
+{
+    $attributes = Attribute::with(['values' => function ($q) {
+        $q->select('id', 'attribute_id', 'value')
+          ->orderBy('value');
+    }])
+    ->where('status', true)
+    ->get(['id', 'name']);
+
+    return response()->json([
+        'success' => true,
+        'data' => $attributes
+    ]);
+}
+
 }
