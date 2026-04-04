@@ -47,6 +47,7 @@ use App\Http\Controllers\API\User\SupportController;
 use App\Http\Controllers\API\Admin\AdminSupportController;
 use App\Http\Controllers\API\Admin\AdminUserController;
 use App\Http\Controllers\API\Admin\AdminLogController;
+use App\Http\Controllers\API\Admin\AdminBrandController;
 
 /*
 |--------------------------------------------------------------------------
@@ -236,7 +237,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::get('/revenue-chart', [AdminDashboardController::class, 'revenueChart'])->middleware('permission:dashboard.view');
             Route::get('/orders-chart', [AdminDashboardController::class, 'ordersChart'])->middleware('permission:dashboard.view');
         });
-        
+
         Route::get('/vendors/pending', [AdminDashboardController::class, 'pendingVendors'])->middleware('permission:vendor.view');
 
         // Admin Category Management
@@ -270,6 +271,20 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/banners', [AdminBannerController::class, 'store'])->middleware('permission:banner.create');
         Route::put('/banners/{id}', [AdminBannerController::class, 'updateBanner'])->middleware('permission:banner.update');
         Route::delete('/banners/{id}', [AdminBannerController::class, 'deleteBanner'])->middleware('permission:banner.delete');
+
+
+
+
+        Route::prefix('brands')->group(function () {
+
+            Route::get('/', [AdminBrandController::class, 'index']);
+            Route::post('/', [AdminBrandController::class, 'store']);
+
+            Route::get('/{brand}', [AdminBrandController::class, 'show']);
+            Route::post('/{brand}', [AdminBrandController::class, 'update']); // for form-data
+            Route::delete('/{brand}', [AdminBrandController::class, 'destroy']);
+
+        });
 
         // Admin Analytics
         Route::prefix('analytics')->group(function () {
