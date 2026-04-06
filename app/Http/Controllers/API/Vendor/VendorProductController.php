@@ -60,6 +60,7 @@ class VendorProductController extends Controller
     // ✅ STORE PRODUCT
     public function store(Request $request)
     {
+        //dd("hello");
         $request->validate([
             'category_id' => 'required|exists:categories,id',
             'name' => 'required|string|max:255',

@@ -186,7 +186,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('vendor')->group(function () {
         Route::get('/dashboard', [VendorDashboardController::class, 'dashboard'])->middleware('permission:vendor.dashboard.view');
         Route::get('/dashboard/stats', [VendorDashboardController::class, 'stats'])->middleware('permission:vendor.dashboard.view');
-        Route::get('/orders/summary', [VendorDashboardController::class, 'ordersSummary'])->middleware('permission:vendor.dashboard.view');
+        //Route::get('/orders/summary', [VendorDashboardController::class, 'ordersSummary'])->middleware('permission:vendor.dashboard.view');
         Route::get('/documents', [VendorDocumentController::class, 'index'])->middleware('permission:vendor.documents.view');
         Route::post('/documents', [VendorDocumentController::class, 'store'])->middleware('permission:vendor.documents.create');
         Route::get('/inventory/{vendor_id}', [VendorInventoryController::class, 'inventory'])->middleware('permission:vendor.inventory.view');
@@ -212,8 +212,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('/vendor/coupons/{id}', [VendorCouponController::class, 'destroy'])->middleware('permission:coupon.delete');
 
     // ==================== VENDOR WALLET & ORDERS (With wallet and order permissions) ====================
-    Route::post('/vendor/wallet/withdraw', [VendorWalletController::class, 'withdraw'])->middleware('permission:wallet.withdraw');
-    Route::post('/vendor/orders/{id}/shipment', [VendorOrderController::class, 'createShipment'])->middleware('permission:order.shipment');
+    Route::post('/wallet/withdraw', [VendorWalletController::class, 'withdraw'])->middleware('permission:wallet.withdraw');
+    //Route::post('vendor/orders/{id}/shipment', [VendorOrderController::class, 'createShipment'])->middleware('permission:order.shipment');
+    Route::get('vendor/orders/summary', [VendorOrderController::class, 'summary']);
+    Route::get('vendor/orders/', [VendorOrderController::class, 'orders']);
+    Route::get('vendor/orders/{order_id}', [VendorOrderController::class, 'show']);
+    Route::post('vendor/orders/{order_id}/shipment', [VendorOrderController::class, 'createShipment']);
+    //Route::patch('vendor/order-items/{item_id}/status', [VendorOrderController::class, 'updateItemStatus']);
+    Route::match(['put', 'patch'], '/vendor/order-items/{id}/status', [VendorOrderController::class, 'updateItemStatus']);
 
     // ==================== PRODUCT QUESTIONS (With question permissions) ====================
     Route::post('/products/{id}/questions', [ProductQuestionController::class, 'store'])->middleware('permission:question.create');
