@@ -26,7 +26,7 @@ class VendorVariantController extends Controller
             'discount_price' => 'nullable|numeric',
             'stock' => 'required|integer',
             'weight' => 'nullable|numeric',
-            'image' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'attribute_value_ids' => 'required|array'
         ]);
 
@@ -143,7 +143,7 @@ public function updateVariant(Request $request, $id)
         'discount_price' => 'nullable|numeric',
         'stock' => 'sometimes|integer',
         'weight' => 'nullable|numeric',
-        'image' => 'nullable|string',
+        'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         'attribute_value_ids' => 'nullable|array'
     ]);
 
