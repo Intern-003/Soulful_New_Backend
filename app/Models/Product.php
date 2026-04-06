@@ -9,7 +9,7 @@ class Product extends Model
     use HasFactory;
 
     protected $fillable = [
-        'vendor_id','category_id','brand_id','name','slug','short_description','description','sku',
+        'vendor_id','user_id','category_id','brand_id','name','slug','short_description','description','sku',
         'price','discount_price','cost_price','stock','weight','length','width','height',
         'status','is_featured','is_approved','approved_by','approved_at'
     ];
@@ -28,4 +28,8 @@ class Product extends Model
     public function variants() { return $this->hasMany(ProductVariant::class); }
     public function tags() { return $this->belongsToMany(Tag::class,'product_tags'); }
     public function reviews() { return $this->hasMany(Review::class); }
+    public function user()
+{
+    return $this->belongsTo(User::class);
+}
 }
