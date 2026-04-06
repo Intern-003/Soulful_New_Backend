@@ -83,20 +83,25 @@ Route::prefix('categories')->group(function () {
 });
 
 // ==================== PRODUCT ROUTES (With product permissions) ====================
+// 🔓 PUBLIC ROUTES
 Route::prefix('products')->group(function () {
+
     Route::get('/search', [ProductController::class, 'search']);
     Route::get('/featured', [ProductController::class, 'featured']);
     Route::get('/latest', [ProductController::class, 'latest']);
     Route::get('/deals', [ProductController::class, 'deals']);
     Route::get('/best-sellers', [ProductController::class, 'bestSellers']);
     Route::get('/', [ProductController::class, 'index']);
+
+    Route::get('/related', [ProductController::class, 'relatedBulk']); // ✅ HERE
+
     Route::get('/{id}/related', [ProductController::class, 'related']);
     Route::get('/{id}/images', [ProductController::class, 'images']);
     Route::get('/{id}/reviews', [ProductController::class, 'reviews']);
     Route::get('/{id}/rating', [ProductController::class, 'rating']);
+
     Route::get('/{slug}', [ProductController::class, 'show']);
 });
-
 
 // ==================== VENDOR STORE ROUTES (With vendor view permissions) ====================
 Route::prefix('vendors')->group(function () {

@@ -153,6 +153,90 @@ public function related($id)
     ]);
 }
 
+public function relatedBulk(Request $request)
+{
+    // ✅ Validate input
+    if (!$request->ids) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Product IDs are required'
+        ], 400);
+    }
+
+    // ✅ Convert IDs to array
+    $ids = explode(',', $request->ids);
+
+    // ✅ Get selected products
+    $products = Product::whereIn('id', $ids)->get();
+
+    if ($products->isEmpty()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No valid products found'
+        ], 404);
+    }
+
+    // ✅ Collect filters
+    $categoryIds = $products->pluck('category_id')->unique();
+    $brandIds = $products->pluck('brand_id')->unique();
+    $avgPrice = $products->avg('price');
+
+    // ✅ Price range (±30%)
+    $minPrice = $avgPrice * 0.7;
+    $maxPrice = $avgPrice * 1.3;
+
+    // =========================================
+    // 🔥 PRIMARY QUERY (Smart Recommendation)
+    // =========================================
+    $related = Product::with('images')
+        ->where(function ($query) use ($categoryIds, $brandIds) {
+            $query->whereIn('category_id', $categoryIds)
+                  ->orWhereIn('brand_id', $brandIds);
+        })
+        ->whereNotIn('id', $ids)
+        ->where('status', 1)
+        ->where('is_approved', 1)
+        ->whereBetween('price', [$minPrice, $maxPrice])
+        ->take(12)
+        ->get();
+
+    // =========================================
+    // 🔥 FALLBACK 1 (Category only)
+    // =========================================
+    if ($related->isEmpty()) {
+        $related = Product::with('images')
+            ->whereIn('category_id', $categoryIds)
+            ->whereNotIn('id', $ids)
+            ->where('status', 1)
+            ->where('is_approved', 1)
+            ->take(12)
+            ->get();
+    }
+
+    // =========================================
+    // 🔥 FALLBACK 2 (Latest products)
+    // =========================================
+    if ($related->isEmpty()) {
+        $related = Product::with('images')
+            ->where('status', 1)
+            ->where('is_approved', 1)
+            ->latest()
+            ->take(12)
+            ->get();
+    }
+
+    // ✅ Final Response
+    return response()->json([
+        'success' => true,
+        'filters_used' => [
+            'categories' => $categoryIds,
+            'brands' => $brandIds,
+            'price_range' => [round($minPrice, 2), round($maxPrice, 2)]
+        ],
+        'data' => $related
+    ]);
+}
+
 // GET /products/{id}/images
 public function images($id)
 {
