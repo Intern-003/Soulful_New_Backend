@@ -21,9 +21,9 @@ class CartController extends Controller
         //     'items.variant'
         // ]);
         $cart->loadMissing([
-    'items.product.images',
-    'items.variant'
-]);
+            'items.product.images',
+            'items.variant'
+        ]);
 
         $totals = $this->calculateTotals($cart);
 
@@ -51,16 +51,16 @@ class CartController extends Controller
         //         'message' => 'User or Guest token required'
         //     ], 400);
         // }
-       if (!$user && !$guestToken) {
-    $guestToken = bin2hex(random_bytes(16));
+        if (!$user && !$guestToken) {
+            $guestToken = bin2hex(random_bytes(16));
 
-    // ✅ CREATE CART IMMEDIATELY
-    $cart = Cart::create([
-        'guest_token' => $guestToken
-    ]);
+            // ✅ CREATE CART IMMEDIATELY
+            $cart = Cart::create([
+                'guest_token' => $guestToken
+            ]);
 
-    return $this->formatCartResponse($cart, $guestToken);
-}
+            return $this->formatCartResponse($cart, $guestToken);
+        }
 
         $cart = Cart::with(['items.product.images', 'items.variant'])
             ->when($user, fn($q) => $q->where('user_id', $user->id))

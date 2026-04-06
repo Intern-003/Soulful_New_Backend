@@ -115,6 +115,7 @@ Route::post('/vendor/register', [VendorRegisterController::class, 'register']);
 
 // ==================== ADMIN BANNERS PUBLIC VIEW ====================
 Route::get('admin/banners', [AdminBannerController::class, 'getBanners']);
+ Route::get('/brands', [AdminBrandController::class, 'index']);
 
 // ==================== AUTHENTICATED ROUTES (All require auth:sanctum + permissions) ====================
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -277,7 +278,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         Route::prefix('brands')->group(function () {
 
-            Route::get('/', [AdminBrandController::class, 'index']);
+           
             Route::post('/', [AdminBrandController::class, 'store']);
 
             Route::get('/{brand}', [AdminBrandController::class, 'show']);

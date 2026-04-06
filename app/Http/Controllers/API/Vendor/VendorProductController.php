@@ -16,9 +16,19 @@ use App\Models\User;
 class VendorProductController extends Controller
 {
     // ✅ Helper: get creator id (vendor or user)
-    private function getCreatorId($user)
+    private function getCreator($user)
     {
-        return $user->vendor ? $user->vendor->id : $user->id;
+        if ($user->vendor) {
+            return [
+                'vendor_id' => $user->vendor->id,
+                'user_id' => null
+            ];
+        }
+
+        return [
+            'vendor_id' => null,
+            'user_id' => $user->id
+        ];
     }
 
     // ✅ Helper: resolve creator (vendor OR user)
@@ -60,7 +70,12 @@ class VendorProductController extends Controller
 
         $user = Auth::user();
 
-        $creatorId = $this->getCreatorId($user);
+        // $creatorId = $this->getCreatorId($user);
+
+
+        $user = Auth::user();
+
+        $creator = $this->getCreator($user);
 
         // slug
         $slug = Str::slug($request->name);
@@ -70,7 +85,8 @@ class VendorProductController extends Controller
         }
 
         $product = Product::create([
-            'vendor_id' => $creatorId,
+            'vendor_id' => $creator['vendor_id'],
+            'user_id' => $creator['user_id'],
             'category_id' => $request->category_id,
             'name' => $request->name,
             'slug' => $slug,
@@ -86,6 +102,8 @@ class VendorProductController extends Controller
             'message' => 'Product created successfully',
             'data' => $product
         ], 201);
+
+
     }
 
     // ✅ GET PRODUCT
@@ -105,9 +123,21 @@ class VendorProductController extends Controller
                 'message' => 'Product not found'
             ], 404);
         }
-
-        // ✅ Resolve creator safely
-        $creator = $this->resolveCreator($product->vendor_id);
+        if ($product->vendor_id) {
+            $creator = [
+                'type' => 'vendor',
+                'id' => $product->vendor->id,
+                'name' => $product->vendor->store_name,
+                'email' => $product->vendor->user->email ?? null
+            ];
+        } else {
+            $creator = [
+                'type' => 'user',
+                'id' => $product->user->id,
+                'name' => $product->user->name,
+                'email' => $product->user->email
+            ];
+        }
 
         return response()->json([
             'success' => true,
