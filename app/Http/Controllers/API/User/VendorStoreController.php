@@ -13,6 +13,7 @@ class VendorStoreController extends Controller
     // GET /vendors
     public function index()
     {
+        //dd("Hello");
         $vendors = Vendor::where('status','approved')
             ->orderBy('rating','desc')
             ->get();

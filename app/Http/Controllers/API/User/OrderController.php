@@ -194,8 +194,8 @@ class OrderController extends Controller
                     throw new \Exception("Insufficient stock for product: {$product->name}");
                 }
 
-                if (!$product->vendor_id) {
-                    throw new \Exception("Product {$product->name} has no vendor assigned");
+                if (!$product->vendor_id && !$product->user_id) {
+                    throw new \Exception("Product {$product->name} has no owner assigned");
                 }
 
                 $itemTotal = $product->price * $item->quantity;
@@ -204,7 +204,8 @@ class OrderController extends Controller
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'variant_id' => $item->variant_id,
-                    'vendor_id' => $product->vendor_id,
+                    'vendor_id' => $product->vendor_id ?? null,
+                    'creator_id' => $product->user_id ?? null,
                     'quantity' => $item->quantity,
                     'price' => $product->price,
                     'total' => $itemTotal,
