@@ -8,7 +8,7 @@ class OrderItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['order_id','product_id','variant_id','vendor_id','price','quantity','total','status'];
+    protected $fillable = ['order_id','product_id','variant_id','vendor_id','creator_id','price','quantity','total','status'];
 
     public function order() { return $this->belongsTo(Order::class); }
     public function product() { return $this->belongsTo(Product::class); }
