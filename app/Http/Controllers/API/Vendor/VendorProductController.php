@@ -31,31 +31,7 @@ class VendorProductController extends Controller
         ];
     }
 
-    // ✅ Helper: resolve creator (vendor OR user)
-    private function resolveCreator($id)
-    {
-        $vendor = Vendor::find($id);
-        if ($vendor) {
-            return [
-                'type' => 'vendor',
-                'id' => $vendor->id,
-                'name' => $vendor->store_name,
-                'email' => $vendor->user->email ?? null
-            ];
-        }
 
-        $user = User::find($id);
-        if ($user) {
-            return [
-                'type' => 'user',
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email
-            ];
-        }
-
-        return null;
-    }
 
     // ✅ STORE PRODUCT
     public function store(Request $request)
@@ -63,10 +39,18 @@ class VendorProductController extends Controller
         //dd("hello");
         $request->validate([
             'category_id' => 'required|exists:categories,id',
+            'brand_id' => 'nullable|exists:brands,id',
             'name' => 'required|string|max:255',
+            'short_description' => 'nullable|string',
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
-            'stock' => 'required|integer|min:0'
+            'discount_price' => 'nullable|numeric|min:0',
+            'cost_price' => 'nullable|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'weight' => 'nullable|numeric',
+            'length' => 'nullable|numeric',
+            'width' => 'nullable|numeric',
+            'height' => 'nullable|numeric',
         ]);
 
         $user = Auth::user();
@@ -89,13 +73,22 @@ class VendorProductController extends Controller
             'vendor_id' => $creator['vendor_id'],
             'user_id' => $creator['user_id'],
             'category_id' => $request->category_id,
+            'brand_id' => $request->brand_id,
             'name' => $request->name,
             'slug' => $slug,
+            'short_description' => $request->short_description,
             'description' => $request->description,
             'price' => $request->price,
+            'discount_price' => $request->discount_price,
+            'cost_price' => $request->cost_price,
             'stock' => $request->stock,
-            'status' => true,
-            'is_approved' => false
+            'weight' => $request->weight,
+            'length' => $request->length,
+            'width' => $request->width,
+            'height' => $request->height,
+            'is_featured' => $request->is_featured ?? 0,
+            'status' => 0,
+            'is_approved' => 0,
         ]);
 
         return response()->json([
@@ -110,13 +103,15 @@ class VendorProductController extends Controller
     // ✅ GET PRODUCT
     public function getProductById($id)
     {
+
         $product = Product::with([
             'category',
+            'vendor',
             'images',
-            'variants' => function ($query) {
-                $query->with('attributes');
-            }
-        ])->find($id);
+            //'variants.attributes',
+            'variants.attributeValues.attribute',
+            //'variants.attributeValues'
+        ])->findOrFail($id);
 
         if (!$product) {
             return response()->json([
@@ -173,14 +168,25 @@ class VendorProductController extends Controller
                     ];
                 }),
 
+
+
                 'variants' => $product->variants->map(function ($variant) {
                     return [
                         'id' => $variant->id,
-                        'sku' => $variant->sku ?? null,
+                        'sku' => $variant->sku,
                         'price' => $variant->price,
                         'stock' => $variant->stock,
                         'image' => $variant->image,
-                        'attributes' => $variant->attributes ?? []
+
+                        // ✅ CLEAN STRUCTURE
+                        'attributes' => $variant->attributeValues->map(function ($val) {
+                            return [
+                                'attribute_id' => $val->attribute_id,
+                                'attribute_name' => $val->attribute->name,
+                                'value_id' => $val->id,
+                                'value' => $val->value,
+                            ];
+                        })
                     ];
                 })
             ]
@@ -190,6 +196,8 @@ class VendorProductController extends Controller
     // ✅ UPDATE PRODUCT
     public function updateProduct(Request $request, $id)
     {
+
+
         $product = Product::find($id);
 
         if (!$product) {
@@ -198,22 +206,59 @@ class VendorProductController extends Controller
                 'message' => 'Product not found'
             ], 404);
         }
+        $user = Auth::user();
+
+        if ($product->vendor_id) {
+            // product belongs to vendor
+            if (!$user->vendor || $user->vendor->id !== $product->vendor_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+        } else {
+            // product belongs to normal user
+            if ($product->user_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+        }
 
         $request->validate([
             'name' => 'sometimes|string|max:255',
             'category_id' => 'sometimes|exists:categories,id',
+            'brand_id' => 'sometimes|exists:brands,id',
             'description' => 'nullable|string',
+            'short_description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:0',
+            'discount_price' => 'nullable|numeric|min:0',
+            'cost_price' => 'nullable|numeric|min:0',
             'stock' => 'sometimes|integer|min:0',
-            'status' => 'sometimes|boolean'
+            'weight' => 'nullable|numeric',
+            'length' => 'nullable|numeric',
+            'width' => 'nullable|numeric',
+            'height' => 'nullable|numeric',
+            // 'status' => 'sometimes|boolean',
+            'is_featured' => 'sometimes|boolean',
         ]);
+
 
         $data = $request->only([
             'category_id',
+            'brand_id',
+            'short_description',
             'description',
             'price',
+            'discount_price',
+            'cost_price',
             'stock',
-            'status'
+            'weight',
+            'length',
+            'width',
+            'height',
+            'is_featured'
         ]);
 
         // slug update
@@ -299,6 +344,25 @@ class VendorProductController extends Controller
                 'success' => false,
                 'message' => 'Product not found'
             ], 404);
+        }
+        $user = Auth::user();
+
+        if ($product->vendor_id) {
+            // product belongs to vendor
+            if (!$user->vendor || $user->vendor->id !== $product->vendor_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+        } else {
+            // product belongs to normal user
+            if ($product->user_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
         }
 
         // delete images
