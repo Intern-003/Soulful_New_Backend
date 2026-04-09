@@ -79,7 +79,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function cart() { return $this->hasOne(Cart::class); }
     public function wishlists() { return $this->hasMany(Wishlist::class); }
     public function reviews() { return $this->hasMany(Review::class); }
-    public function notifications() { return $this->hasMany(Notification::class); }
+   
     public function activityLogs() { return $this->hasMany(ActivityLog::class); }
 
 

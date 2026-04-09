@@ -48,12 +48,31 @@ use App\Http\Controllers\API\Admin\AdminSupportController;
 use App\Http\Controllers\API\Admin\AdminUserController;
 use App\Http\Controllers\API\Admin\AdminLogController;
 use App\Http\Controllers\API\Admin\AdminBrandController;
+use App\Http\Controllers\API\Admin\AdminProductController;
 
 /*
 |--------------------------------------------------------------------------
 | API Routes - ALL ROUTES HAVE PERMISSION MIDDLEWARE
 |--------------------------------------------------------------------------
 */
+
+Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
+
+    Route::get('/products', [AdminProductController::class, 'index']);
+
+    Route::post('/products/{id}/approve', [AdminProductController::class, 'approve']);
+    Route::post('/products/{id}/reject', [AdminProductController::class, 'reject']);
+
+    Route::post('/products/{id}/toggle-status', [AdminProductController::class, 'toggleStatus']);
+});
+
+Route::middleware('auth:sanctum')->get('/notifications', function (Request $request) {
+    return $request->user()->notifications;
+});
+
+Route::post('/notifications/read', function (Request $request) {
+    $request->user()->unreadNotifications->markAsRead();
+});
 
 // ==================== PUBLIC AUTH ROUTES (No permission required) ====================
 Route::post('auth/register', [AuthController::class, 'register']);
@@ -260,14 +279,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/categories/{id}', [AdminCategoryController::class, 'deleteCategory'])->middleware('permission:category.delete');
         Route::delete('/subcategories/{id}', [AdminCategoryController::class, 'deleteSubcategory'])->middleware('permission:category.delete');
 
-        // Admin Attribute Management
+        //Admin Attribute Management
         Route::post('/attributes', [AdminAttributeController::class, 'store'])->middleware('permission:attribute.create');
         Route::put('/attributes/{id}', [AdminAttributeController::class, 'updateAttribute'])->middleware('permission:attribute.update');
         Route::delete('/attributes/{id}', [AdminAttributeController::class, 'deleteAttribute'])->middleware('permission:attribute.delete');
         Route::post('/attributes/{id}/values', [AdminAttributeValueController::class, 'store'])->middleware('permission:attribute.create');
         Route::put('/attribute-values/{id}', [AdminAttributeValueController::class, 'updateAttributeValue'])->middleware('permission:attribute.update');
         Route::delete('/attribute-values/{id}', [AdminAttributeValueController::class, 'deleteAttributeValue'])->middleware('permission:attribute.delete');
-
+       
         // Admin Commission Management
         Route::post('/commissions', [AdminCommissionController::class, 'store'])->middleware('permission:commission.create');
         Route::put('/vendors/{id}/commission', [AdminCommissionController::class, 'updateVendorCommission'])->middleware('permission:commission.update');
@@ -289,9 +308,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         Route::prefix('brands')->group(function () {
 
-           
             Route::post('/', [AdminBrandController::class, 'store']);
-
             Route::get('/{brand}', [AdminBrandController::class, 'show']);
             Route::post('/{brand}', [AdminBrandController::class, 'update']); // for form-data
             Route::delete('/{brand}', [AdminBrandController::class, 'destroy']);
@@ -351,8 +368,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         // Admin Order Management
         Route::get('/orders', [AdminOrderController::class, 'index'])->middleware('permission:order.view');
-        Route::get('/orders/{id}', [AdminOrderController::class, 'show'])->middleware('permission:order.view');
-        Route::put('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])->middleware('permission:order.update');
+        // Route::get('/orders/{id}', [AdminOrderController::class, 'show'])->middleware('permission:order.view');
+        // Route::put('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])->middleware('permission:order.update');
+
+         Route::get('/orders/summary', [AdminOrderController::class, 'summary']);
+    Route::get('/orders', [AdminOrderController::class, 'index']);
+    Route::get('/orders/{id}', [AdminOrderController::class, 'show']);
+    Route::put('/orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
+    Route::get('/orders/revenue', [AdminOrderController::class, 'revenueByDate']);
 
         // Admin Settings
         Route::get('/settings', [AdminSettingsController::class, 'index'])->middleware('permission:settings.view');
