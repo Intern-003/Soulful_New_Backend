@@ -28,6 +28,11 @@ class Product extends Model
     public function variants() { return $this->hasMany(ProductVariant::class); }
     public function tags() { return $this->belongsToMany(Tag::class,'product_tags'); }
     public function reviews() { return $this->hasMany(Review::class); }
+
+    public function specifications()
+{
+    return $this->hasMany(ProductSpecification::class);
+}
     public function user()
 {
     return $this->belongsTo(User::class);

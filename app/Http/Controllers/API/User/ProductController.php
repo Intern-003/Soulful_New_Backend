@@ -17,6 +17,8 @@ class ProductController extends Controller
             ->where('status',1)
             ->where('is_approved',1);
 
+
+
         // category filter
         if($request->category){
             $query->where('category_id',$request->category);
@@ -43,11 +45,18 @@ class ProductController extends Controller
     // GET /products/{slug}
 public function show($slug)
 {
-    $product = Product::with(['category','brand','images','reviews'])
+    $product = Product::with(['category','brand','images','reviews','vendor','variants.attributeValues.attribute','specifications'])
         ->where('slug',$slug)
         ->where('status',1)
         ->where('is_approved',1)
         ->firstOrFail();
+//         $product = Product::with([
+//     'category',
+//     'vendor',
+//     'images',
+//     'variants.attributeValues.attribute',
+//     'specifications' // ✅ ADD THIS
+// ])->findOrFail($id);
 
     return response()->json([
         'success'=>true,
