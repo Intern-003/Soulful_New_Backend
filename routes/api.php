@@ -220,7 +220,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // ==================== VENDOR CRUD ROUTES (With product permissions) ====================
     Route::post('/vendor/products', [VendorProductController::class, 'store'])->middleware('permission:product.create');
     Route::get('vendor/products/{id}', [VendorProductController::class, 'getProductById'])->middleware('permission:product.show');
-    Route::put('/vendor/products/{id}', [VendorProductController::class, 'updateProduct'])->middleware('permission:product.update');
+    Route::put('vendor/products/{id}', [VendorProductController::class, 'updateProduct'])->middleware('permission:product.update');
     Route::delete('/vendor/products/{id}', [VendorProductController::class, 'deleteProduct'])->middleware('permission:product.delete');
 
     Route::post('/vendor/products/{id}/images', [ProductImageController::class, 'store'])->middleware('permission:product.create');
