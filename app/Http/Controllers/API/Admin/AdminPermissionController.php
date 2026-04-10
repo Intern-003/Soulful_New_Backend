@@ -8,15 +8,13 @@ use App\Models\Permission;
 
 class AdminPermissionController extends Controller
 {
-    // List all permissions
+    // ✅ List all permissions
     public function index()
     {
         return response()->json(Permission::all());
     }
 
-    // --------------------------
-    // Get Permission by ID
-    // --------------------------
+    // ✅ Get Permission by ID
     public function show($id)
     {
         $permission = Permission::find($id);
@@ -33,16 +31,39 @@ class AdminPermissionController extends Controller
             'permission' => $permission
         ]);
     }
-    // Create permission
+
+    // ✅ Create permission (AUTO NAME)
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|unique:permissions,name',
             'module' => 'required|string',
             'action' => 'required|string',
         ]);
 
-        $permission = Permission::create($request->all());
+        // ✅ Normalize
+        $module = strtolower(trim($request->module));
+        $action = strtolower(trim($request->action));
+
+        // ✅ Auto generate name
+        $name = $module . '.' . $action;
+
+        // ✅ Prevent duplicates
+        $exists = Permission::where('module', $module)
+            ->where('action', $action)
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Permission already exists'
+            ], 422);
+        }
+
+        $permission = Permission::create([
+            'name' => $name,
+            'module' => $module,
+            'action' => $action,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -50,18 +71,38 @@ class AdminPermissionController extends Controller
         ]);
     }
 
-    // Update permission
+    // ✅ Update permission (AUTO NAME)
     public function update(Request $request, $id)
     {
         $permission = Permission::findOrFail($id);
 
         $request->validate([
-            'name' => 'required|string|unique:permissions,name,' . $permission->id,
             'module' => 'required|string',
             'action' => 'required|string',
         ]);
 
-        $permission->update($request->all());
+        $module = strtolower(trim($request->module));
+        $action = strtolower(trim($request->action));
+        $name = $module . '.' . $action;
+
+        // ✅ Prevent duplicate (excluding current)
+        $exists = Permission::where('module', $module)
+            ->where('action', $action)
+            ->where('id', '!=', $permission->id)
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Permission already exists'
+            ], 422);
+        }
+
+        $permission->update([
+            'name' => $name,
+            'module' => $module,
+            'action' => $action,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -69,11 +110,12 @@ class AdminPermissionController extends Controller
         ]);
     }
 
-    // Delete permission
+    // ✅ Delete permission
     public function destroy($id)
     {
         $permission = Permission::findOrFail($id);
-        $permission->roles()->detach(); // remove from role_permissions pivot
+
+        $permission->roles()->detach();
         $permission->delete();
 
         return response()->json([
@@ -81,5 +123,4 @@ class AdminPermissionController extends Controller
             'message' => 'Permission deleted'
         ]);
     }
-
 }

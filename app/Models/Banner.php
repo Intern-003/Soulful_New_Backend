@@ -21,4 +21,10 @@ class Banner extends Model
     protected $casts = [
         'status' => 'boolean'
     ];
+    public function products()
+{
+    return $this->belongsToMany(Product::class, 'banner_products')
+        ->withPivot('position')
+        ->orderBy('banner_products.position');
+}
 }

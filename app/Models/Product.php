@@ -37,4 +37,13 @@ class Product extends Model
 {
     return $this->belongsTo(User::class);
 }
+public function banners()
+{
+    return $this->belongsToMany(Banner::class, 'banner_products');
+}
+public function primaryImage()
+{
+    return $this->hasOne(ProductImage::class)
+        ->where('is_primary', 1);
+}
 }
