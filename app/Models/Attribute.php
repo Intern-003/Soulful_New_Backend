@@ -12,5 +12,15 @@ class Attribute extends Model
     protected $casts = ['status' => 'boolean'];
 
     public function values() { return $this->hasMany(AttributeValue::class); }
-    public function variants() { return $this->belongsToMany(ProductVariant::class,'product_variant_attributes'); }
+    // public function variants() { return $this->belongsToMany(ProductVariant::class,'product_variant_attributes'); }
+
+public function variants()
+{
+    return $this->belongsToMany(
+        ProductVariant::class,
+        'product_variant_attributes',
+        'attribute_id',   // pivot column for Attribute
+        'variant_id'      // pivot column for ProductVariant
+    );
 }
+    }
