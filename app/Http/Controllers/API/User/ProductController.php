@@ -45,7 +45,7 @@ class ProductController extends Controller
     // GET /products/{slug}
 public function show($slug)
 {
-    $product = Product::with(['category','brand','images','reviews','vendor','variants.attributeValues.attribute','specifications'])
+    $product = Product::with(['category','brand','images','reviews.user:id,name','vendor','variants.attributeValues.attribute','specifications'])
         ->where('slug',$slug)
         ->where('status',1)
         ->where('is_approved',1)
