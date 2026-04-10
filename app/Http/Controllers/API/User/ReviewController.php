@@ -60,25 +60,13 @@ public function store(Request $request)
         'review' => 'nullable|string'
     ]);
 
-    // ❌ Prevent duplicate review (1 user = 1 review per product)
-    $existingReview = Review::where('user_id', $user->id)
-        ->where('product_id', $validated['product_id'])
-        ->first();
-
-    if ($existingReview) {
-        return response()->json([
-            'success' => false,
-            'message' => 'You have already reviewed this product'
-        ], 400);
-    }
-
     $review = Review::create([
         'user_id' => $user->id,
         'product_id' => $validated['product_id'],
         'rating' => $validated['rating'],
         'title' => $validated['title'] ?? null,
         'review' => $validated['review'] ?? null,
-        'status' => 0 // pending (recommended)
+        'status' => 0 // pending
     ]);
 
     return response()->json([

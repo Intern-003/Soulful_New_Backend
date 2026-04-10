@@ -13,9 +13,9 @@ class ProductController extends Controller
     public function index(Request $request)
     {
 
-        $query = Product::with(['category','brand','images'])
-            ->where('status',1)
-            ->where('is_approved',1);
+        $query = Product::with(['category','brand','images']);
+            // ->where('status',1)
+            // ->where('is_approved',1);
 
 
 
@@ -45,24 +45,137 @@ class ProductController extends Controller
     // GET /products/{slug}
 public function show($slug)
 {
-    $product = Product::with(['category','brand','images','reviews.user:id,name','vendor','variants.attributeValues.attribute','specifications'])
-        ->where('slug',$slug)
-        ->where('status',1)
-        ->where('is_approved',1)
-        ->firstOrFail();
-//         $product = Product::with([
-//     'category',
-//     'vendor',
-//     'images',
-//     'variants.attributeValues.attribute',
-//     'specifications' // ✅ ADD THIS
-// ])->findOrFail($id);
+    $product = Product::with([
+        'category',
+        'brand',
+        'images',
+        'reviews' => function ($query) {
+            $query->where('status', 1)
+                ->latest()
+                ->with('user:id,name');
+        },
+        'vendor',
+        'variants.attributeValues.attribute',
+        'specifications'
+    ])
+    ->where('slug', $slug)
+    ->where('status', 1)
+    ->where('is_approved', 1)
+    ->firstOrFail();
+
+    // 🔥 Transform variants
+    $product->variants->transform(function ($variant) {
+
+        $grouped = [];
+
+        foreach ($variant->attributeValues as $value) {
+            $grouped[$value->attribute->name] = $value->value;
+        }
+
+        $variant->attributes = $grouped;
+
+        unset($variant->attributeValues); // remove raw data
+
+        return $variant;
+    });
 
     return response()->json([
-        'success'=>true,
-        'data'=>$product
+        'success' => true,
+        'data' => $product
     ]);
 }
+
+// public function show($slug)
+// {
+//     $product = Product::with([
+//         'category:id,name,slug',
+//         'brand:id,name,logo',
+//         'images:id,product_id,image_url,is_primary',
+//         'reviews' => function ($query) {
+//             $query->where('status', 1)
+//                   ->latest()
+//                   ->with('user:id,name')
+//                   ->take(5); // limit for performance
+//         },
+//         'vendor:id,store_name,rating',
+//         'variants.attributeValues.attribute',
+//         'specifications'
+//     ])
+//     ->where('slug', $slug)
+//     ->where('status', 1)
+//     ->where('is_approved', 1)
+//     ->firstOrFail();
+
+//     // ✅ Transform response manually
+//     $formattedProduct = [
+//         'id' => $product->id,
+//         'name' => $product->name,
+//         'slug' => $product->slug,
+
+//         'price' => (float) $product->price,
+//         'discount_price' => (float) $product->discount_price,
+//         'discount_percent' => $product->discount_price
+//             ? round((($product->price - $product->discount_price) / $product->price) * 100)
+//             : 0,
+
+//         'stock' => $product->stock,
+
+//         'main_image' => optional($product->images->firstWhere('is_primary', true))->image_url,
+
+//         'images' => $product->images->pluck('image_url'),
+
+//         'category' => $product->category ? [
+//             'id' => $product->category->id,
+//             'name' => $product->category->name,
+//             'slug' => $product->category->slug,
+//         ] : null,
+
+//         'brand' => $product->brand ? [
+//             'id' => $product->brand->id,
+//             'name' => $product->brand->name,
+//             'logo' => $product->brand->logo,
+//         ] : null,
+
+//         'vendor' => $product->vendor ? [
+//             'id' => $product->vendor->id,
+//             'store_name' => $product->vendor->store_name,
+//             'rating' => (float) $product->vendor->rating,
+//         ] : null,
+
+//         // ✅ Flatten variants
+//         'variants' => $product->variants->map(function ($variant) {
+//             return [
+//                 'id' => $variant->id,
+//                 'sku' => $variant->sku,
+//                 'price' => (float) $variant->price,
+//                 'stock' => $variant->stock,
+//                 'attributes' => $variant->attributeValues->mapWithKeys(function ($val) {
+//                     return [$val->attribute->name => $val->value];
+//                 })
+//             ];
+//         }),
+
+//         // ✅ Clean reviews
+//         'reviews' => $product->reviews->map(function ($review) {
+//             return [
+//                 'id' => $review->id,
+//                 'rating' => $review->rating,
+//                 'review' => $review->review,
+//                 'user' => $review->user->name ?? null,
+//                 'created_at' => $review->created_at->format('Y-m-d')
+//             ];
+//         }),
+
+//         // ✅ Computed fields
+//         'average_rating' => round($product->reviews->avg('rating'), 1),
+//         'review_count' => $product->reviews->count(),
+//     ];
+
+//     return response()->json([
+//         'success' => true,
+//         'data' => $formattedProduct
+//     ]);
+// }
 
 // GET /products/search
 public function search(Request $request)

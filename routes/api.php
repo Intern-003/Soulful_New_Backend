@@ -56,22 +56,28 @@ use App\Http\Controllers\API\Admin\AdminProductController;
 |--------------------------------------------------------------------------
 */
 
-Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
-
+Route::prefix('admin')->middleware(['auth:sanctum'])->group(function () {
     Route::get('/products', [AdminProductController::class, 'index']);
-
-    Route::post('/products/{id}/approve', [AdminProductController::class, 'approve']);
-    Route::post('/products/{id}/reject', [AdminProductController::class, 'reject']);
-
-    Route::post('/products/{id}/toggle-status', [AdminProductController::class, 'toggleStatus']);
+    
+    // ✅ Single toggle endpoint for approve/reject
+    Route::post('/products/{id}/toggle-approval', [AdminProductController::class, 'toggleApproval']);
+    
+    // Separate endpoint for active/inactive status
+    Route::put('/products/{id}/toggle-status', [AdminProductController::class, 'toggleStatus']);
+    
+    // Bulk operations
+    Route::post('/products/bulk-toggle-approval', [AdminProductController::class, 'bulkToggleApproval']);
 });
 
-Route::middleware('auth:sanctum')->get('/notifications', function (Request $request) {
-    return $request->user()->notifications;
-});
+Route::middleware('auth:sanctum')->group(function () {
 
-Route::post('/notifications/read', function (Request $request) {
-    $request->user()->unreadNotifications->markAsRead();
+    Route::get('/notifications', [AdminProductController::class, 'notifications']);
+
+    Route::get('/notifications/unread-count', [AdminProductController::class, 'unreadCount']);
+
+    Route::post('/notifications/{id}/read', [AdminProductController::class, 'markAsRead']);
+
+    Route::post('/notifications/read-all', [AdminProductController::class, 'markAllAsRead']);
 });
 
 // ==================== PUBLIC AUTH ROUTES (No permission required) ====================
@@ -280,12 +286,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/subcategories/{id}', [AdminCategoryController::class, 'deleteSubcategory'])->middleware('permission:category.delete');
 
         //Admin Attribute Management
-        Route::post('/attributes', [AdminAttributeController::class, 'store'])->middleware('permission:attribute.create');
-        Route::put('/attributes/{id}', [AdminAttributeController::class, 'updateAttribute'])->middleware('permission:attribute.update');
-        Route::delete('/attributes/{id}', [AdminAttributeController::class, 'deleteAttribute'])->middleware('permission:attribute.delete');
-        Route::post('/attributes/{id}/values', [AdminAttributeValueController::class, 'store'])->middleware('permission:attribute.create');
-        Route::put('/attribute-values/{id}', [AdminAttributeValueController::class, 'updateAttributeValue'])->middleware('permission:attribute.update');
-        Route::delete('/attribute-values/{id}', [AdminAttributeValueController::class, 'deleteAttributeValue'])->middleware('permission:attribute.delete');
+        Route::post('/attributes', [AdminAttributeController::class, 'store']);
+        Route::put('/attributes/{id}', [AdminAttributeController::class, 'updateAttribute']);
+        Route::delete('/attributes/{id}', [AdminAttributeController::class, 'deleteAttribute']);
+        Route::post('/attributes/{id}/values', [AdminAttributeValueController::class, 'store']);
+        Route::put('/attribute-values/{id}', [AdminAttributeValueController::class, 'updateAttributeValue']);
+        Route::delete('/attribute-values/{id}', [AdminAttributeValueController::class, 'deleteAttributeValue']);
        
         // Admin Commission Management
         Route::post('/commissions', [AdminCommissionController::class, 'store'])->middleware('permission:commission.create');
