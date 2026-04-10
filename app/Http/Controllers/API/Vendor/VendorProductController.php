@@ -31,10 +31,7 @@ class VendorProductController extends Controller
         ];
     }
 
-
-
     // ✅ STORE PRODUCT
-    // ✅ STORE PRODUCT - FIXED
     public function store(Request $request)
     {
         $request->validate([
@@ -59,7 +56,6 @@ class VendorProductController extends Controller
         $user = Auth::user();
         $creator = $this->getCreator($user);
 
-        // slug
         $slug = Str::slug($request->name);
         $count = Product::where('slug', 'LIKE', $slug . '%')->count();
         if ($count > 0) {
@@ -88,7 +84,6 @@ class VendorProductController extends Controller
             'is_approved' => 0,
         ]);
 
-        // ✅ Save specifications if provided
         if ($request->has('specifications') && is_array($request->specifications)) {
             foreach ($request->specifications as $spec) {
                 if (!empty($spec['name']) && !empty($spec['value'])) {
@@ -100,36 +95,24 @@ class VendorProductController extends Controller
             }
         }
 
-        // ✅ FIXED: Return proper response structure
         return response()->json([
             'success' => true,
             'message' => 'Product created successfully',
-            'data' => $product->load('specifications')  // ✅ Added 'data' key
+            'data' => $product->load('specifications')
         ], 201);
     }
 
-    // ✅ GET PRODUCT
+    // ✅ GET PRODUCT - FIXED with all missing fields
     public function getProductById($id)
     {
-
-        // $product = Product::with([
-        //     'category',
-        //     'vendor',
-        //     'images',
-        //     //'variants.attributes',
-        //     'variants.attributeValues.attribute',
-        //     //'variants.attributeValues'
-        // ])->findOrFail($id);
-
-
         $product = Product::with([
             'category',
             'vendor',
+            'brand',  // ✅ Added brand relationship
             'images',
             'variants.attributeValues.attribute',
-            'specifications' // ✅ ADD THIS
+            'specifications'
         ])->findOrFail($id);
-
 
         if ($product->vendor_id) {
             $creator = [
@@ -154,21 +137,36 @@ class VendorProductController extends Controller
                 'id' => $product->id,
                 'name' => $product->name,
                 'slug' => $product->slug,
+                'short_description' => $product->short_description,  // ✅ ADDED
                 'description' => $product->description,
                 'price' => $product->price,
+                'discount_price' => $product->discount_price,  // ✅ ADDED
+                'cost_price' => $product->cost_price,  // ✅ ADDED
                 'stock' => $product->stock,
+                'weight' => $product->weight,  // ✅ ADDED
+                'length' => $product->length,  // ✅ ADDED
+                'width' => $product->width,    // ✅ ADDED
+                'height' => $product->height,  // ✅ ADDED
+                'is_featured' => (bool)$product->is_featured,  // ✅ ADDED
                 'status' => $product->status,
                 'is_approved' => $product->is_approved,
+                'brand_id' => $product->brand_id,  // ✅ ADDED
+                'category_id' => $product->category_id,  // ✅ ADDED
                 'created_at' => $product->created_at,
                 'updated_at' => $product->updated_at,
 
-                // ✅ creator (vendor OR user)
                 'creator' => $creator,
 
                 'category' => $product->category ? [
                     'id' => $product->category->id,
                     'name' => $product->category->name,
-                    'slug' => $product->category->slug ?? null
+                    'slug' => $product->category->slug ?? null,
+                    'parent_id' => $product->category->parent_id  // ✅ ADDED parent_id
+                ] : null,
+
+                'brand' => $product->brand ? [  // ✅ ADDED brand details
+                    'id' => $product->brand->id,
+                    'name' => $product->brand->name
                 ] : null,
 
                 'images' => $product->images->map(function ($image) {
@@ -180,8 +178,6 @@ class VendorProductController extends Controller
                     ];
                 }),
 
-
-
                 'variants' => $product->variants->map(function ($variant) {
                     return [
                         'id' => $variant->id,
@@ -189,8 +185,6 @@ class VendorProductController extends Controller
                         'price' => $variant->price,
                         'stock' => $variant->stock,
                         'image' => $variant->image,
-
-                        // ✅ CLEAN STRUCTURE
                         'attributes' => $variant->attributeValues->map(function ($val) {
                             return [
                                 'attribute_id' => $val->attribute_id,
@@ -206,6 +200,8 @@ class VendorProductController extends Controller
                         'id' => $spec->id,
                         'name' => $spec->name,
                         'value' => $spec->value,
+                        'created_at' => $spec->created_at,
+                        'updated_at' => $spec->updated_at,
                     ];
                 })
             ]
@@ -213,7 +209,6 @@ class VendorProductController extends Controller
     }
 
     // ✅ UPDATE PRODUCT
-    // ✅ UPDATE PRODUCT - FIXED
     public function updateProduct(Request $request, $id)
     {
         $product = Product::find($id);
@@ -229,8 +224,8 @@ class VendorProductController extends Controller
             'name' => 'sometimes|string|max:255',
             'category_id' => 'sometimes|exists:categories,id',
             'brand_id' => 'sometimes|exists:brands,id',
+            'short_description' => 'nullable|string',  // ✅ ADDED validation
             'description' => 'nullable|string',
-            'short_description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:0',
             'discount_price' => 'nullable|numeric|min:0',
             'cost_price' => 'nullable|numeric|min:0',
@@ -248,7 +243,7 @@ class VendorProductController extends Controller
         $data = $request->only([
             'category_id',
             'brand_id',
-            'short_description',
+            'short_description',  // ✅ ADDED
             'description',
             'price',
             'discount_price',
@@ -261,7 +256,6 @@ class VendorProductController extends Controller
             'is_featured'
         ]);
 
-        // slug update
         if ($request->has('name')) {
             $slug = Str::slug($request->name);
             $count = Product::where('slug', 'LIKE', $slug . '%')
@@ -278,12 +272,9 @@ class VendorProductController extends Controller
 
         $product->update($data);
 
-        // ✅ Update specifications if provided
         if ($request->has('specifications')) {
-            // Remove old specs
             $product->specifications()->delete();
 
-            // Insert new ones
             if (is_array($request->specifications)) {
                 foreach ($request->specifications as $spec) {
                     if (!empty($spec['name']) && !empty($spec['value'])) {
@@ -296,13 +287,13 @@ class VendorProductController extends Controller
             }
         }
 
-        // ✅ FIXED: Return proper response structure
         return response()->json([
             'success' => true,
             'message' => 'Product updated successfully',
-            'data' => $product->load('specifications')  // ✅ Added 'data' key
+            'data' => $product->load('specifications')
         ]);
     }
+
     // ✅ UPDATE STOCK
     public function updateStock(Request $request, $id)
     {
@@ -321,7 +312,6 @@ class VendorProductController extends Controller
         ]);
 
         if ($request->has('variant_id')) {
-
             $variant = ProductVariant::where('id', $request->variant_id)
                 ->where('product_id', $product->id)
                 ->first();
@@ -362,33 +352,12 @@ class VendorProductController extends Controller
                 'message' => 'Product not found'
             ], 404);
         }
-        // $user = Auth::user();
 
-        // if ($product->vendor_id) {
-        //     // product belongs to vendor
-        //     if (!$user->vendor || $user->vendor->id !== $product->vendor_id) {
-        //         return response()->json([
-        //             'success' => false,
-        //             'message' => 'Unauthorized'
-        //         ], 403);
-        //     }
-        // } else {
-        //     // product belongs to normal user
-        //     if ($product->user_id !== $user->id) {
-        //         return response()->json([
-        //             'success' => false,
-        //             'message' => 'Unauthorized'
-        //         ], 403);
-        //     }
-        // }
-
-        // delete images
         $images = ProductImage::where('product_id', $product->id)->get();
 
         foreach ($images as $image) {
             if ($image->image_url) {
                 $path = str_replace(url('/storage/'), 'public/', $image->image_url);
-
                 if (Storage::exists($path)) {
                     Storage::delete($path);
                 }
@@ -396,9 +365,8 @@ class VendorProductController extends Controller
             $image->delete();
         }
 
-        // delete variants
         ProductVariant::where('product_id', $product->id)->delete();
-
+        $product->specifications()->delete();  // ✅ Also delete specifications
         $product->delete();
 
         return response()->json([
