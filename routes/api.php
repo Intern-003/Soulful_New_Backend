@@ -272,8 +272,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/vendors/pending', [AdminDashboardController::class, 'pendingVendors'])->middleware('permission:vendor.view');
 
         // Admin Category Management
-        Route::post('/categories', [AdminCategoryController::class, 'store'])->middleware('permission:category.create');
-        Route::post('/subcategories', [AdminCategoryController::class, 'storeSubcategory'])->middleware('permission:category.create');
+        Route::post('/categories', [AdminCategoryController::class, 'store']);
+        Route::post('/subcategories', [AdminCategoryController::class, 'storeSubcategory']);
         Route::put('/categories/{id}', [AdminCategoryController::class, 'updateCategory'])->middleware('permission:category.update');
         Route::put('/subcategories/{id}', [AdminCategoryController::class, 'updateSubcategory'])->middleware('permission:category.update');
         Route::delete('/categories/{id}', [AdminCategoryController::class, 'deleteCategory'])->middleware('permission:category.delete');
