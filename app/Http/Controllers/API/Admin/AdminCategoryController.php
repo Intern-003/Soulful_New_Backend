@@ -11,42 +11,64 @@ use Illuminate\Support\Str;
 class AdminCategoryController extends Controller
 {
 
-    // POST /admin/categories
-public function store(Request $request)
-{
-    $request->validate([
-        'name' => 'required|string|max:255',
-        'parent_id' => 'nullable|exists:categories,id',
-        'description' => 'nullable|string',
-        'image' => 'nullable|string',
-        'position' => 'nullable|integer'
-    ]);
+    // ✅ COMMON SLUG GENERATOR (REUSABLE)
+    private function generateUniqueSlug($name, $ignoreId = null)
+    {
+        $slug = Str::slug($name);
+        $originalSlug = $slug;
+        $counter = 1;
 
-    $slug = Str::slug($request->name);
+        while (
+            Category::where('slug', $slug)
+                ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = $originalSlug . '-' . $counter;
+            $counter++;
+        }
 
-    // Ensure slug is unique
-    $count = Category::where('slug','LIKE',$slug.'%')->count();
-
-    if($count > 0){
-        $slug = $slug.'-'.($count+1);
+        return $slug;
     }
 
-    $category = Category::create([
-        'parent_id' => $request->parent_id,
-        'name' => $request->name,
-        'slug' => $slug,
-        'description' => $request->description,
-        'image' => $request->image,
-        'position' => $request->position,
-        'status' => true
-    ]);
+    // POST /admin/categories
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'parent_id' => 'nullable|exists:categories,id',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'position' => 'nullable|integer'
+        ]);
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Category created successfully',
-        'data' => $category
-    ]);
-}
+        // ✅ FIXED SLUG
+        $slug = $this->generateUniqueSlug($request->name);
+
+        // ✅ IMAGE UPLOAD
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $filename = time().'_'.$file->getClientOriginalName();
+            $file->move(public_path('uploads/categories'), $filename);
+            $imagePath = 'uploads/categories/'.$filename;
+        }
+
+        $category = Category::create([
+            'parent_id' => $request->parent_id,
+            'name' => $request->name,
+            'slug' => $slug,
+            'description' => $request->description,
+            'image' => $imagePath,
+            'position' => $request->position,
+            'status' => true
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Category created successfully',
+            'data' => $category
+        ]);
+    }
 
     // POST /admin/subcategories
     public function storeSubcategory(Request $request)
@@ -54,15 +76,20 @@ public function store(Request $request)
         $request->validate([
             'parent_id' => 'required|exists:categories,id',
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
 
-        $slug = Str::slug($request->name);
+        // ✅ FIXED SLUG
+        $slug = $this->generateUniqueSlug($request->name);
 
-        $count = Category::where('slug','LIKE',$slug.'%')->count();
-
-        if($count > 0){
-            $slug = $slug.'-'.($count+1);
+        // ✅ IMAGE UPLOAD (FIXED ISSUE HERE)
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $filename = time().'_'.$file->getClientOriginalName();
+            $file->move(public_path('uploads/categories'), $filename);
+            $imagePath = 'uploads/categories/'.$filename;
         }
 
         $subcategory = Category::create([
@@ -70,6 +97,7 @@ public function store(Request $request)
             'name' => $request->name,
             'slug' => $slug,
             'description' => $request->description,
+            'image' => $imagePath, // ✅ NOW WORKS
             'status' => true
         ]);
 
@@ -80,180 +108,157 @@ public function store(Request $request)
         ]);
     }
 
-    public function deleteCategory($id)
-{
-    $category = Category::find($id);
+    public function deleteSubcategory($id)
+    {
+        $subcategory = Category::find($id);
 
-    if (!$category) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Category not found'
-        ], 404);
-    }
-
-    // Check if category has subcategories
-    $hasChildren = Category::where('parent_id', $id)->exists();
-
-    if ($hasChildren) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Cannot delete category with subcategories. Delete subcategories first.'
-        ], 400);
-    }
-
-    // (Optional but recommended) check if products exist under this category
-    if (Product::where('category_id', $id)->exists()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Category has products. Cannot delete.'
-        ], 400);
-    }
-
-    $category->delete();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Category deleted successfully'
-    ]);
-}
-
-public function deleteSubcategory($id)
-{
-    $subcategory = Category::find($id);
-
-    if (!$subcategory) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Subcategory not found'
-        ], 404);
-    }
-
-    // Ensure it's a subcategory
-    if (is_null($subcategory->parent_id)) {
-        return response()->json([
-            'success' => false,
-            'message' => 'This is not a subcategory'
-        ], 400);
-    }
-
-            // Optional: check if products exist under subcategory
-    if (Product::where('category_id', $id)->exists()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Subcategory has products. Cannot delete.'
-        ], 400);
-    }
-
-    $subcategory->delete();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Subcategory deleted successfully'
-    ]);
-}
-
-public function updateCategory(Request $request, $id)
-{
-    $category = Category::find($id);
-
-    if (!$category) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Category not found'
-        ], 404);
-    }
-
-    $request->validate([
-        'name' => 'sometimes|string|max:255',
-        'parent_id' => 'nullable|exists:categories,id',
-        'description' => 'nullable|string',
-        'image' => 'nullable|string',
-        'position' => 'nullable|integer',
-        'status' => 'nullable|boolean'
-    ]);
-
-    if ($request->has('name') && $request->name != $category->name) {
-        $slug = Str::slug($request->name);
-
-        // Ensure slug uniqueness
-        $count = Category::where('slug','LIKE',$slug.'%')
-            ->where('id','!=',$id)
-            ->count();
-
-        if ($count > 0) {
-            $slug = $slug.'-'.($count+1);
+        if (!$subcategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Subcategory not found'
+            ], 404);
         }
 
-        $category->slug = $slug;
-        $category->name = $request->name;
+        if (is_null($subcategory->parent_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This is not a subcategory'
+            ], 400);
+        }
+
+        if (Product::where('category_id', $id)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Subcategory has products. Cannot delete.'
+            ], 400);
+        }
+
+        // ✅ DELETE IMAGE SAFELY
+        if ($subcategory->image && file_exists(public_path($subcategory->image))) {
+            unlink(public_path($subcategory->image));
+        }
+
+        $subcategory->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Subcategory deleted successfully'
+        ]);
     }
 
-    if ($request->has('parent_id')) $category->parent_id = $request->parent_id;
-    if ($request->has('description')) $category->description = $request->description;
-    if ($request->has('image')) $category->image = $request->image;
-    if ($request->has('position')) $category->position = $request->position;
-    if ($request->has('status')) $category->status = $request->status;
+    public function updateCategory(Request $request, $id)
+    {
+        $category = Category::find($id);
 
-    $category->save();
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Category updated successfully',
-        'data' => $category
-    ]);
-}
+        $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'parent_id' => 'nullable|exists:categories,id',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'position' => 'nullable|integer',
+            'status' => 'nullable|boolean'
+        ]);
+
+        // ✅ FIXED SLUG
+        if ($request->has('name') && $request->name != $category->name) {
+            $category->slug = $this->generateUniqueSlug($request->name, $id);
+            $category->name = $request->name;
+        }
+
+        if ($request->has('parent_id')) $category->parent_id = $request->parent_id;
+        if ($request->has('description')) $category->description = $request->description;
+
+        // ✅ IMAGE UPDATE
+        if ($request->hasFile('image')) {
+
+            if ($category->image && file_exists(public_path($category->image))) {
+                unlink(public_path($category->image));
+            }
+
+            $file = $request->file('image');
+            $filename = time().'_'.$file->getClientOriginalName();
+            $file->move(public_path('uploads/categories'), $filename);
+
+            $category->image = 'uploads/categories/'.$filename;
+        }
+
+        if ($request->has('position')) $category->position = $request->position;
+        if ($request->has('status')) $category->status = $request->status;
+
+        $category->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Category updated successfully',
+            'data' => $category
+        ]);
+    }
+
     public function updateSubcategory(Request $request, $id)
-{
-    $subcategory = Category::find($id);
+    {
+        $subcategory = Category::find($id);
 
-    if (!$subcategory) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Subcategory not found'
-        ], 404);
-    }
-
-    // Ensure it's a subcategory
-    if (is_null($subcategory->parent_id)) {
-        return response()->json([
-            'success' => false,
-            'message' => 'This is not a subcategory'
-        ], 400);
-    }
-
-    $request->validate([
-        'name' => 'sometimes|string|max:255',
-        'parent_id' => 'sometimes|exists:categories,id',
-        'description' => 'nullable|string',
-        'status' => 'nullable|boolean'
-    ]);
-
-    if ($request->has('name') && $request->name != $subcategory->name) {
-        $slug = Str::slug($request->name);
-
-        $count = Category::where('slug','LIKE',$slug.'%')
-            ->where('id','!=',$id)
-            ->count();
-
-        if ($count > 0) {
-            $slug = $slug.'-'.($count+1);
+        if (!$subcategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Subcategory not found'
+            ], 404);
         }
 
-        $subcategory->slug = $slug;
-        $subcategory->name = $request->name;
+        if (is_null($subcategory->parent_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This is not a subcategory'
+            ], 400);
+        }
+
+        $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'parent_id' => 'sometimes|exists:categories,id',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'status' => 'nullable|boolean'
+        ]);
+
+        // ✅ FIXED SLUG
+        if ($request->has('name') && $request->name != $subcategory->name) {
+            $subcategory->slug = $this->generateUniqueSlug($request->name, $id);
+            $subcategory->name = $request->name;
+        }
+
+        if ($request->has('parent_id')) $subcategory->parent_id = $request->parent_id;
+        if ($request->has('description')) $subcategory->description = $request->description;
+
+        // ✅ IMAGE UPDATE (FIXED ISSUE)
+        if ($request->hasFile('image')) {
+
+            if ($subcategory->image && file_exists(public_path($subcategory->image))) {
+                unlink(public_path($subcategory->image));
+            }
+
+            $file = $request->file('image');
+            $filename = time().'_'.$file->getClientOriginalName();
+            $file->move(public_path('uploads/categories'), $filename);
+
+            $subcategory->image = 'uploads/categories/'.$filename;
+        }
+
+        if ($request->has('status')) $subcategory->status = $request->status;
+
+        $subcategory->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Subcategory updated successfully',
+            'data' => $subcategory
+        ]);
     }
-
-    if ($request->has('parent_id')) $subcategory->parent_id = $request->parent_id;
-    if ($request->has('description')) $subcategory->description = $request->description;
-    if ($request->has('status')) $subcategory->status = $request->status;
-
-    $subcategory->save();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Subcategory updated successfully',
-        'data' => $subcategory
-    ]);
-}
 
 }

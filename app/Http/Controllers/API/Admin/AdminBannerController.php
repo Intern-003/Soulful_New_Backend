@@ -48,6 +48,12 @@ class AdminBannerController extends Controller
                 'message' => 'Banner not found'
             ], 404);
         }
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
+        }
 
         return response()->json([
             'success' => true,
@@ -74,6 +80,7 @@ class AdminBannerController extends Controller
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
             'link' => 'nullable|string',
+            'layout' => 'nullable|in:grid,highlight,carousel',
             'position' => 'nullable|integer',
             'status' => 'nullable|boolean',
             'image' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048'
@@ -89,10 +96,22 @@ class AdminBannerController extends Controller
             'title' => $request->title,
             'subtitle' => $request->subtitle,
             'link' => $request->link,
+            'layout' => $request->layout ?? 'grid',
             'position' => $request->position ?? 1,
             'status' => $request->status ?? true,
             'image' => $imagePath
         ]);
+
+        // attach products
+        if ($request->has('products')) {
+            $syncData = [];
+
+            foreach ($request->products as $index => $productId) {
+                $syncData[$productId] = ['position' => $index + 1];
+            }
+
+            $banner->products()->sync($syncData);
+        }
 
         return response()->json([
             'success' => true,
@@ -116,6 +135,12 @@ class AdminBannerController extends Controller
     {
         $banner = Banner::find($id);
 
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
+        }
         if (!$banner) {
             return response()->json([
                 'success' => false,
