@@ -6,152 +6,197 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Banner;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class AdminBannerController extends Controller
 {
+    // ----------------------------
+    // GET ALL BANNERS
+    // ----------------------------
+    public function getBanners()
+    {
+        $banners = Banner::orderBy('position', 'asc')->get()->map(function ($banner) {
+            return [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $banner->image
+                    ? asset('storage/' . $banner->image)
+                    : null,
+            ];
+        });
 
- // ----------------------------
- // Get All Banners
- // GET /admin/banners
- // ----------------------------
-public function getBanners()
-{
-    $banners = Banner::orderBy('position', 'asc')->get();
-
-    return response()->json([
-        'success' => true,
-        'data' => $banners
-    ]);
-}
- // ----------------------------
- // Get Single Banner
- // GET /admin/banners/{id}
- // ----------------------------
-public function getBanner($id)
-{
-    $banner = Banner::find($id);
-
-    if (!$banner) {
         return response()->json([
-            'success' => false,
-            'message' => 'Banner not found'
-        ], 404);
+            'success' => true,
+            'data' => $banners
+        ]);
     }
 
-    return response()->json([
-        'success' => true,
-        'data' => $banner
-    ]);
-}
+    // ----------------------------
+    // GET SINGLE BANNER
+    // ----------------------------
+    public function getBanner($id)
+    {
+        $banner = Banner::find($id);
 
-    // POST /admin/banners
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $banner->image
+                    ? asset('storage/' . $banner->image)
+                    : null,
+            ]
+        ]);
+    }
+
+    // ----------------------------
+    // STORE BANNER (WITH IMAGE UPLOAD)
+    // ----------------------------
     public function store(Request $request)
     {
         $request->validate([
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
-            'image' => 'required|string',
             'link' => 'nullable|string',
             'position' => 'nullable|integer',
-            'status' => 'nullable|boolean'
+            'status' => 'nullable|boolean',
+            'image' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
+
+        $imagePath = null;
+
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('banners', 'public');
+        }
 
         $banner = Banner::create([
             'title' => $request->title,
             'subtitle' => $request->subtitle,
-            'image' => $request->image,
             'link' => $request->link,
             'position' => $request->position ?? 1,
-            'status' => $request->status ?? true
+            'status' => $request->status ?? true,
+            'image' => $imagePath
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Banner created successfully',
-            'data' => $banner
-        ],201);
+            'data' => [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $imagePath ? asset('storage/' . $imagePath) : null,
+            ]
+        ], 201);
     }
 
-    public function deleteBanner($id)
-{
-    $banner = Banner::find($id);
+    // ----------------------------
+    // UPDATE BANNER (WITH IMAGE REPLACE)
+    // ----------------------------
+    public function updateBanner(Request $request, $id)
+    {
+        $banner = Banner::find($id);
 
-    if (!$banner) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Banner not found'
-        ], 404);
-    }
-
-    // ✅ Delete image from storage
-    if ($banner->image) {
-        $path = str_replace(url('/storage/'), 'public/', $banner->image);
-
-        if (Storage::exists($path)) {
-            Storage::delete($path);
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
         }
-    }
 
-    $banner->delete();
+        $request->validate([
+            'title' => 'sometimes|string|max:255',
+            'subtitle' => 'nullable|string|max:255',
+            'link' => 'nullable|string',
+            'position' => 'nullable|integer',
+            'status' => 'sometimes|boolean',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
+        ]);
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Banner deleted successfully'
-    ]);
-}   
+        $data = $request->only([
+            'title',
+            'subtitle',
+            'link',
+            'position',
+            'status'
+        ]);
 
-public function updateBanner(Request $request, $id)
-{
-    $banner = Banner::find($id);
+        // ----------------------------
+        // IMAGE UPDATE LOGIC
+        // ----------------------------
+        if ($request->hasFile('image')) {
 
-    if (!$banner) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Banner not found'
-        ], 404);
-    }
-
-    $request->validate([
-        'title' => 'sometimes|string|max:255',
-        'subtitle' => 'nullable|string|max:255',
-        'image' => 'nullable|string',
-        'link' => 'nullable|string',
-        'position' => 'nullable|integer',
-        'status' => 'sometimes|boolean'
-    ]);
-
-    $data = $request->only([
-        'title',
-        'subtitle',
-        'link',
-        'position',
-        'status'
-    ]);
-
-    
-    // ✅ Handle image update
-    if ($request->has('image')) {
-
-        // delete old image
-        if ($banner->image) {
-            $oldPath = str_replace(url('/storage/'), 'public/', $banner->image);
-
-            if (Storage::exists($oldPath)) {
-                Storage::delete($oldPath);
+            // delete old image safely
+            if ($banner->image && Storage::disk('public')->exists($banner->image)) {
+                Storage::disk('public')->delete($banner->image);
             }
+
+            // store new image
+            $data['image'] = $request->file('image')->store('banners', 'public');
         }
 
-        $data['image'] = $request->image;
+        $banner->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Banner updated successfully',
+            'data' => [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $banner->image
+                    ? asset('storage/' . $banner->image)
+                    : null,
+            ]
+        ]);
     }
 
-    $banner->update($data);
+    // ----------------------------
+    // DELETE BANNER
+    // ----------------------------
+    public function deleteBanner($id)
+    {
+        $banner = Banner::find($id);
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Banner updated successfully',
-        'data' => $banner
-    ]);
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
+        }
+
+        // delete image from storage
+        if ($banner->image && Storage::disk('public')->exists($banner->image)) {
+            Storage::disk('public')->delete($banner->image);
+        }
+
+        $banner->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Banner deleted successfully'
+        ]);
+    }
 }
-
-
-}                                                     

@@ -15,4 +15,8 @@ class OrderItem extends Model
     public function variant() { return $this->belongsTo(ProductVariant::class,'variant_id'); }
     public function vendor() { return $this->belongsTo(Vendor::class); }
     public function vendorTransactions() { return $this->hasMany(VendorTransaction::class); }
+
+    public function shipment() {
+    return $this->hasOne(Shipment::class);
+}
 }

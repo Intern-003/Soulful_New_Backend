@@ -10,24 +10,45 @@ use App\Models\OrderItem;
 
 class VendorOrderController extends Controller
 {
+    /**
+     * 🔄 AUTO SYNC ORDER STATUS FROM ITEMS
+     */
+    private function syncOrderStatus($orderId)
+    {
+        $items = OrderItem::where('order_id', $orderId)->pluck('status');
+
+        if ($items->isEmpty()) return;
+
+        $order = Order::find($orderId);
+
+        if (!$order) return;
+
+        // ✅ ALL DELIVERED
+        if ($items->every(fn($s) => $s === 'delivered')) {
+            $order->update(['order_status' => 'delivered']);
+            return;
+        }
+
+        // ✅ ALL SHIPPED OR DELIVERED MIX
+        if ($items->every(fn($s) => in_array($s, ['shipped', 'delivered']))) {
+            $order->update(['order_status' => 'shipped']);
+            return;
+        }
+
+        // ✅ DEFAULT
+        $order->update(['order_status' => 'processing']);
+    }
 
     /**
-     * 🔹 SUMMARY (Dashboard stats)
+     * 📊 SUMMARY
      */
     public function summary(Request $request)
     {
-        $vendor = $request->user()->vendor;
+        $user = $request->user();
 
-        if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vendor not found'
-            ], 404);
-        }
-
-        $query = OrderItem::where(function ($q) use ($vendor) {
-            $q->where('vendor_id', $vendor->id)
-              ->orWhere('creator_id', $vendor->id);
+        $query = OrderItem::where(function ($q) use ($user) {
+            $q->where('vendor_id', optional($user->vendor)->id)
+              ->orWhere('creator_id', $user->id);
         });
 
         return response()->json([
@@ -38,54 +59,39 @@ class VendorOrderController extends Controller
                 'status_breakdown' => [
                     'pending' => (clone $query)->where('status', 'pending')->count(),
                     'processing' => (clone $query)->where('status', 'processing')->count(),
+                    'shipped' => (clone $query)->where('status', 'shipped')->count(),
                     'delivered' => (clone $query)->where('status', 'delivered')->count(),
                 ]
             ]
         ]);
     }
 
-
     /**
-     * 🔹 ORDERS LIST (only vendor-related orders)
+     * 📦 ORDERS LIST
      */
     public function orders(Request $request)
     {
-        $vendor = $request->user()->vendor;
+        $user = $request->user();
 
-        if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vendor not found'
-            ], 404);
-        }
-
-        $orderIds = OrderItem::where(function ($q) use ($vendor) {
-                $q->where('vendor_id', $vendor->id)
-                  ->orWhere('creator_id', $vendor->id);
+        $orderIds = OrderItem::where(function ($q) use ($user) {
+                $q->where('vendor_id', optional($user->vendor)->id)
+                  ->orWhere('creator_id', $user->id);
             })
             ->distinct()
             ->pluck('order_id');
 
-        $orders = Order::with(['address'])
-            ->whereIn('id', $orderIds)
-            ->latest()
-            ->paginate(10);
-
-        // ✅ Filter items per order
-        $orders->getCollection()->transform(function ($order) use ($vendor) {
-
-            $items = $order->items()
-                ->where(function ($q) use ($vendor) {
-                    $q->where('vendor_id', $vendor->id)
-                      ->orWhere('creator_id', $vendor->id);
-                })
-                ->with(['product', 'vendor'])
-                ->get();
-
-            $order->setRelation('items', $items);
-
-            return $order;
-        });
+        $orders = Order::with([
+            'address',
+            'items' => function ($q) use ($user) {
+                $q->where(function ($q2) use ($user) {
+                    $q2->where('vendor_id', optional($user->vendor)->id)
+                       ->orWhere('creator_id', $user->id);
+                })->with(['product', 'vendor', 'shipment']);
+            }
+        ])
+        ->whereIn('id', $orderIds)
+        ->latest()
+        ->paginate(10);
 
         return response()->json([
             'success' => true,
@@ -93,40 +99,29 @@ class VendorOrderController extends Controller
         ]);
     }
 
-
     /**
-     * 🔹 ORDER DETAILS (ONLY vendor items)
+     * 🔍 ORDER DETAILS
      */
     public function show(Request $request, $id)
     {
-        $vendor = $request->user()->vendor;
+        $user = $request->user();
 
-        if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vendor not found'
-            ], 404);
-        }
-
-        $order = Order::with(['address'])
-            ->whereHas('items', function ($q) use ($vendor) {
-                $q->where(function ($q2) use ($vendor) {
-                    $q2->where('vendor_id', $vendor->id)
-                       ->orWhere('creator_id', $vendor->id);
-                });
-            })
-            ->findOrFail($id);
-
-        // ✅ ONLY vendor's items
-        $items = $order->items()
-            ->where(function ($q) use ($vendor) {
-                $q->where('vendor_id', $vendor->id)
-                  ->orWhere('creator_id', $vendor->id);
-            })
-            ->with(['product', 'vendor'])
-            ->get();
-
-        $order->setRelation('items', $items);
+        $order = Order::with([
+            'address',
+            'items' => function ($q) use ($user) {
+                $q->where(function ($q2) use ($user) {
+                    $q2->where('vendor_id', optional($user->vendor)->id)
+                       ->orWhere('creator_id', $user->id);
+                })->with(['product', 'vendor', 'shipment']);
+            }
+        ])
+        ->whereHas('items', function ($q) use ($user) {
+            $q->where(function ($q2) use ($user) {
+                $q2->where('vendor_id', optional($user->vendor)->id)
+                   ->orWhere('creator_id', $user->id);
+            });
+        })
+        ->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -134,20 +129,12 @@ class VendorOrderController extends Controller
         ]);
     }
 
-
     /**
-     * 🔹 CREATE SHIPMENT (secure)
+     * 🚚 CREATE SHIPMENT (FULL + ITEM WISE)
      */
     public function createShipment(Request $request, $id)
     {
-        $vendor = $request->user()->vendor;
-
-        if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vendor not found'
-            ], 404);
-        }
+        $user = $request->user();
 
         $request->validate([
             'carrier' => 'required|string',
@@ -156,66 +143,125 @@ class VendorOrderController extends Controller
 
         $order = Order::findOrFail($id);
 
-        // ✅ Ensure vendor owns at least one item
-        $hasItems = OrderItem::where('order_id', $order->id)
-            ->where(function ($q) use ($vendor) {
-                $q->where('vendor_id', $vendor->id)
-                  ->orWhere('creator_id', $vendor->id);
+        // ✅ seller items
+        $items = OrderItem::where('order_id', $id)
+            ->where(function ($q) use ($user) {
+                $q->where('vendor_id', optional($user->vendor)->id)
+                  ->orWhere('creator_id', $user->id);
             })
-            ->exists();
+            ->get();
 
-        if (!$hasItems) {
+        if ($items->isEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized for this order'
+                'message' => 'Unauthorized'
             ], 403);
         }
 
-        $shipment = Shipment::create([
-            'order_id' => $order->id,
-            'vendor_id' => $vendor->id,
-            'carrier' => $request->carrier,
-            'tracking_number' => $request->tracking_number,
-            'status' => 'shipped',
-            'shipped_at' => now()
-        ]);
+        $totalItems = OrderItem::where('order_id', $id)->count();
+
+        $shipments = [];
+
+        /**
+         * =========================
+         * CASE 1: FULL ORDER SHIPMENT
+         * =========================
+         */
+        if ($items->count() === $totalItems) {
+
+            $exists = Shipment::where('order_id', $id)
+                ->whereNull('order_item_id')
+                ->where('vendor_id', optional($user->vendor)->id)
+                ->where('creator_id', $user->id)
+                ->exists();
+
+            if ($exists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Shipment already exists'
+                ], 400);
+            }
+
+            $shipments[] = Shipment::create([
+                'order_id' => $id,
+                'order_item_id' => null,
+                'vendor_id' => optional($user->vendor)->id,
+                'creator_id' => $user->id,
+                'carrier' => $request->carrier,
+                'tracking_number' => $request->tracking_number,
+                'status' => 'shipped',
+                'shipped_at' => now()
+            ]);
+
+            foreach ($items as $item) {
+                $item->update(['status' => 'shipped']);
+            }
+        }
+
+        /**
+         * =========================
+         * CASE 2: ITEM WISE SHIPMENT
+         * =========================
+         */
+        else {
+            foreach ($items as $item) {
+
+                if ($item->shipment) continue;
+
+                $shipments[] = Shipment::create([
+                    'order_id' => $id,
+                    'order_item_id' => $item->id,
+                    'vendor_id' => $item->vendor_id,
+                    'creator_id' => $item->creator_id,
+                    'carrier' => $request->carrier,
+                    'tracking_number' => $request->tracking_number,
+                    'status' => 'shipped',
+                    'shipped_at' => now()
+                ]);
+
+                $item->update(['status' => 'shipped']);
+            }
+        }
+
+        $this->syncOrderStatus($id);
 
         return response()->json([
             'success' => true,
             'message' => 'Shipment created successfully',
-            'data' => $shipment
+            'data' => $shipments
         ], 201);
     }
 
-
     /**
-     * 🔹 UPDATE ITEM STATUS
+     * 🧾 UPDATE ITEM STATUS
      */
     public function updateItemStatus(Request $request, $itemId)
     {
-        $vendor = $request->user()->vendor;
-
-        if (!$vendor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vendor not found'
-            ], 404);
-        }
+        $user = $request->user();
 
         $request->validate([
-            'status' => 'required|string'
+            'status' => 'required|in:pending,processing,shipped,delivered,cancelled'
         ]);
 
         $item = OrderItem::where('id', $itemId)
-            ->where(function ($q) use ($vendor) {
-                $q->where('vendor_id', $vendor->id)
-                  ->orWhere('creator_id', $vendor->id);
+            ->where(function ($q) use ($user) {
+                $q->where('vendor_id', optional($user->vendor)->id)
+                  ->orWhere('creator_id', $user->id);
             })
             ->firstOrFail();
 
-        $item->update([
-            'status' => $request->status
-        ]);
+        $order = Order::find($item->order_id);
+
+        if ($order && $order->order_status === 'delivered') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order already delivered'
+            ], 400);
+        }
+
+        $item->update(['status' => $request->status]);
+
+        $this->syncOrderStatus($item->order_id);
 
         return response()->json([
             'success' => true,
