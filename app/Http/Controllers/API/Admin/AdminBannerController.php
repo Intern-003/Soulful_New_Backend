@@ -6,23 +6,28 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Banner;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class AdminBannerController extends Controller
 {
-
     // ----------------------------
-    // Get All Banners
+    // GET ALL BANNERS
     // ----------------------------
     public function getBanners()
     {
-        $banners = Banner::with([
-            'products' => function ($q) {
-                $q->select('products.id', 'products.name', 'products.price')
-                  ->with(['primaryImage:id,product_id,image_url']);
-            }
-        ])
-        ->orderBy('position', 'asc')
-        ->get();
+        $banners = Banner::orderBy('position', 'asc')->get()->map(function ($banner) {
+            return [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $banner->image
+                    ? asset('storage/' . $banner->image)
+                    : null,
+            ];
+        });
 
         return response()->json([
             'success' => true,
@@ -31,17 +36,18 @@ class AdminBannerController extends Controller
     }
 
     // ----------------------------
-    // Get Single Banner
+    // GET SINGLE BANNER
     // ----------------------------
     public function getBanner($id)
     {
-        $banner = Banner::with([
-            'products' => function ($q) {
-                $q->select('products.id', 'products.name', 'products.price')
-                  ->with(['primaryImage:id,product_id,image_url']);
-            }
-        ])->find($id);
+        $banner = Banner::find($id);
 
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
+        }
         if (!$banner) {
             return response()->json([
                 'success' => false,
@@ -51,36 +57,49 @@ class AdminBannerController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $banner
+            'data' => [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $banner->image
+                    ? asset('storage/' . $banner->image)
+                    : null,
+            ]
         ]);
     }
 
     // ----------------------------
-    // Create Banner
+    // STORE BANNER (WITH IMAGE UPLOAD)
     // ----------------------------
     public function store(Request $request)
     {
         $request->validate([
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
-            'image' => 'required|string',
             'link' => 'nullable|string',
             'layout' => 'nullable|in:grid,highlight,carousel',
             'position' => 'nullable|integer',
             'status' => 'nullable|boolean',
-
-            'products' => 'nullable|array',
-            'products.*' => 'exists:products,id'
+            'image' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
+
+        $imagePath = null;
+
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('banners', 'public');
+        }
 
         $banner = Banner::create([
             'title' => $request->title,
             'subtitle' => $request->subtitle,
-            'image' => $request->image,
             'link' => $request->link,
             'layout' => $request->layout ?? 'grid',
             'position' => $request->position ?? 1,
-            'status' => $request->status ?? true
+            'status' => $request->status ?? true,
+            'image' => $imagePath
         ]);
 
         // attach products
@@ -97,17 +116,20 @@ class AdminBannerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Banner created successfully',
-            'data' => $banner->load([
-                'products' => function ($q) {
-                    $q->select('products.id', 'products.name', 'products.price')
-                      ->with(['primaryImage:id,product_id,image_url']);
-                }
-            ])
+            'data' => [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $imagePath ? asset('storage/' . $imagePath) : null,
+            ]
         ], 201);
     }
 
     // ----------------------------
-    // Update Banner
+    // UPDATE BANNER (WITH IMAGE REPLACE)
     // ----------------------------
     public function updateBanner(Request $request, $id)
     {
@@ -119,70 +141,65 @@ class AdminBannerController extends Controller
                 'message' => 'Banner not found'
             ], 404);
         }
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
+        }
 
         $request->validate([
             'title' => 'sometimes|string|max:255',
             'subtitle' => 'nullable|string|max:255',
-            'image' => 'nullable|string',
             'link' => 'nullable|string',
-            'layout' => 'nullable|in:grid,highlight,carousel',
             'position' => 'nullable|integer',
             'status' => 'sometimes|boolean',
-
-            'products' => 'nullable|array',
-            'products.*' => 'exists:products,id'
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
 
         $data = $request->only([
             'title',
             'subtitle',
             'link',
-            'layout',
             'position',
             'status'
         ]);
 
-        // image update
-        if ($request->has('image')) {
+        // ----------------------------
+        // IMAGE UPDATE LOGIC
+        // ----------------------------
+        if ($request->hasFile('image')) {
 
-            if ($banner->image) {
-                $oldPath = str_replace(url('/storage/'), 'public/', $banner->image);
-
-                if (Storage::exists($oldPath)) {
-                    Storage::delete($oldPath);
-                }
+            // delete old image safely
+            if ($banner->image && Storage::disk('public')->exists($banner->image)) {
+                Storage::disk('public')->delete($banner->image);
             }
 
-            $data['image'] = $request->image;
+            // store new image
+            $data['image'] = $request->file('image')->store('banners', 'public');
         }
 
         $banner->update($data);
 
-        // sync products
-        if ($request->has('products')) {
-            $syncData = [];
-
-            foreach ($request->products as $index => $productId) {
-                $syncData[$productId] = ['position' => $index + 1];
-            }
-
-            $banner->products()->sync($syncData);
-        }
-
         return response()->json([
             'success' => true,
             'message' => 'Banner updated successfully',
-            'data' => $banner->load([
-                'products' => function ($q) {
-                    $q->select('products.id', 'products.name', 'products.price')
-                      ->with(['primaryImage:id,product_id,image_url']);
-                }
-            ])
+            'data' => [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $banner->image
+                    ? asset('storage/' . $banner->image)
+                    : null,
+            ]
         ]);
     }
 
     // ----------------------------
-    // Delete Banner
+    // DELETE BANNER
     // ----------------------------
     public function deleteBanner($id)
     {
@@ -195,12 +212,9 @@ class AdminBannerController extends Controller
             ], 404);
         }
 
-        if ($banner->image) {
-            $path = str_replace(url('/storage/'), 'public/', $banner->image);
-
-            if (Storage::exists($path)) {
-                Storage::delete($path);
-            }
+        // delete image from storage
+        if ($banner->image && Storage::disk('public')->exists($banner->image)) {
+            Storage::disk('public')->delete($banner->image);
         }
 
         $banner->delete();

@@ -13,4 +13,8 @@ class Shipment extends Model
 
     public function order() { return $this->belongsTo(Order::class); }
     public function vendor() { return $this->belongsTo(Vendor::class); }
+
+    public function item() {
+    return $this->belongsTo(OrderItem::class, 'order_item_id');
+}
 }
