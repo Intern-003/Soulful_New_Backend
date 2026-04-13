@@ -5,29 +5,37 @@ namespace App\Http\Controllers\API\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Banner;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
+use Carbon\Carbon;
 use Illuminate\Support\Str;
 
 class AdminBannerController extends Controller
 {
-    // ----------------------------
-    // GET ALL BANNERS
-    // ----------------------------
+
+    // ============================
+    // GET ACTIVE BANNERS
+    // ============================
     public function getBanners()
     {
-        $banners = Banner::orderBy('position', 'asc')->get()->map(function ($banner) {
-            return [
-                'id' => $banner->id,
-                'title' => $banner->title,
-                'subtitle' => $banner->subtitle,
-                'link' => $banner->link,
-                'position' => $banner->position,
-                'status' => $banner->status,
-                'image_url' => $banner->image
-                    ? asset('storage/' . $banner->image)
-                    : null,
-            ];
-        });
+        $now = Carbon::now();
+
+        $banners = Banner::with([
+            'products' => function ($q) {
+                $q->select('products.id', 'products.name', 'products.price')
+                  ->with(['primaryImage:id,product_id,image_url']);
+            }
+        ])
+        ->where('status', true)
+        ->where(function ($q) use ($now) {
+            $q->whereNull('start_date')
+              ->orWhere('start_date', '<=', $now);
+        })
+        ->where(function ($q) use ($now) {
+            $q->whereNull('end_date')
+              ->orWhere('end_date', '>=', $now);
+        })
+        ->orderBy('position', 'asc')
+        ->get();
 
         return response()->json([
             'success' => true,
@@ -35,9 +43,9 @@ class AdminBannerController extends Controller
         ]);
     }
 
-    // ----------------------------
-    // GET SINGLE BANNER
-    // ----------------------------
+    // ============================
+    // GET SINGLE
+    // ============================
     public function getBanner($id)
     {
         $banner = Banner::find($id);
@@ -71,66 +79,79 @@ class AdminBannerController extends Controller
         ]);
     }
 
-    // ----------------------------
-    // STORE BANNER (WITH IMAGE UPLOAD)
-    // ----------------------------
+    // ============================
+    // CREATE
+    // ============================
     public function store(Request $request)
     {
         $request->validate([
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'link' => 'nullable|string',
             'layout' => 'nullable|in:grid,highlight,carousel',
             'position' => 'nullable|integer',
             'status' => 'nullable|boolean',
-            'image' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048'
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'products' => 'nullable|array',
+            'products.*' => 'exists:products,id'
         ]);
 
         $imagePath = null;
 
+        // ✅ STORE IMAGE IN public/uploads/banners
         if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('banners', 'public');
+            $file = $request->file('image');
+
+            $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+            $destinationPath = public_path('uploads/banners');
+
+            // create folder if not exists
+            if (!File::exists($destinationPath)) {
+                File::makeDirectory($destinationPath, 0755, true);
+            }
+
+            $file->move($destinationPath, $fileName);
+
+            $imagePath = 'uploads/banners/' . $fileName;
         }
 
         $banner = Banner::create([
             'title' => $request->title,
             'subtitle' => $request->subtitle,
+            'description' => $request->description,
+            'image' => $imagePath,
             'link' => $request->link,
             'layout' => $request->layout ?? 'grid',
             'position' => $request->position ?? 1,
             'status' => $request->status ?? true,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
             'image' => $imagePath
         ]);
 
-        // attach products
+        // sync products
         if ($request->has('products')) {
             $syncData = [];
-
-            foreach ($request->products as $index => $productId) {
-                $syncData[$productId] = ['position' => $index + 1];
+            foreach ($request->products as $i => $id) {
+                $syncData[$id] = ['position' => $i + 1];
             }
-
             $banner->products()->sync($syncData);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Banner created successfully',
-            'data' => [
-                'id' => $banner->id,
-                'title' => $banner->title,
-                'subtitle' => $banner->subtitle,
-                'link' => $banner->link,
-                'position' => $banner->position,
-                'status' => $banner->status,
-                'image_url' => $imagePath ? asset('storage/' . $imagePath) : null,
-            ]
+            'data' => $banner
         ], 201);
     }
 
-    // ----------------------------
-    // UPDATE BANNER (WITH IMAGE REPLACE)
-    // ----------------------------
+    // ============================
+    // UPDATE
+    // ============================
     public function updateBanner(Request $request, $id)
     {
         $banner = Banner::find($id);
@@ -151,56 +172,69 @@ class AdminBannerController extends Controller
         $request->validate([
             'title' => 'sometimes|string|max:255',
             'subtitle' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'link' => 'nullable|string',
             'position' => 'nullable|integer',
             'status' => 'sometimes|boolean',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
 
         $data = $request->only([
             'title',
             'subtitle',
+            'description',
             'link',
             'position',
-            'status'
+            'status',
+            'start_date',
+            'end_date'
         ]);
 
-        // ----------------------------
-        // IMAGE UPDATE LOGIC
-        // ----------------------------
+        // ✅ UPDATE IMAGE
         if ($request->hasFile('image')) {
 
-            // delete old image safely
-            if ($banner->image && Storage::disk('public')->exists($banner->image)) {
-                Storage::disk('public')->delete($banner->image);
+            // delete old image
+            if ($banner->image && file_exists(public_path($banner->image))) {
+                unlink(public_path($banner->image));
             }
 
-            // store new image
-            $data['image'] = $request->file('image')->store('banners', 'public');
+            $file = $request->file('image');
+            $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+            $destinationPath = public_path('uploads/banners');
+
+            if (!File::exists($destinationPath)) {
+                File::makeDirectory($destinationPath, 0755, true);
+            }
+
+            $file->move($destinationPath, $fileName);
+
+            $data['image'] = 'uploads/banners/' . $fileName;
         }
 
         $banner->update($data);
 
+        // sync products
+        if ($request->has('products')) {
+            $syncData = [];
+            foreach ($request->products as $i => $id) {
+                $syncData[$id] = ['position' => $i + 1];
+            }
+            $banner->products()->sync($syncData);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Banner updated successfully',
-            'data' => [
-                'id' => $banner->id,
-                'title' => $banner->title,
-                'subtitle' => $banner->subtitle,
-                'link' => $banner->link,
-                'position' => $banner->position,
-                'status' => $banner->status,
-                'image_url' => $banner->image
-                    ? asset('storage/' . $banner->image)
-                    : null,
-            ]
+            'data' => $banner
         ]);
     }
 
-    // ----------------------------
-    // DELETE BANNER
-    // ----------------------------
+    // ============================
+    // DELETE
+    // ============================
     public function deleteBanner($id)
     {
         $banner = Banner::find($id);
@@ -212,9 +246,8 @@ class AdminBannerController extends Controller
             ], 404);
         }
 
-        // delete image from storage
-        if ($banner->image && Storage::disk('public')->exists($banner->image)) {
-            Storage::disk('public')->delete($banner->image);
+        if ($banner->image && file_exists(public_path($banner->image))) {
+            unlink(public_path($banner->image));
         }
 
         $banner->delete();
