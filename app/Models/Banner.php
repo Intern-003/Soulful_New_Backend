@@ -12,6 +12,7 @@ class Banner extends Model
     protected $fillable = [
         'title',
         'subtitle',
+        'description',
         'image',
         'link',
         'position',
@@ -27,4 +28,5 @@ class Banner extends Model
         ->withPivot('position')
         ->orderBy('banner_products.position');
 }
+
 }
