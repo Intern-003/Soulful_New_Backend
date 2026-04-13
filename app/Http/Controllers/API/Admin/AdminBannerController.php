@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Banner;
 use Illuminate\Support\Facades\File;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 
 class AdminBannerController extends Controller
 {
@@ -47,13 +48,14 @@ class AdminBannerController extends Controller
     // ============================
     public function getBanner($id)
     {
-        $banner = Banner::with([
-            'products' => function ($q) {
-                $q->select('products.id', 'products.name', 'products.price')
-                  ->with(['primaryImage:id,product_id,image_url']);
-            }
-        ])->find($id);
+        $banner = Banner::find($id);
 
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
+        }
         if (!$banner) {
             return response()->json([
                 'success' => false,
@@ -63,7 +65,17 @@ class AdminBannerController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $banner
+            'data' => [
+                'id' => $banner->id,
+                'title' => $banner->title,
+                'subtitle' => $banner->subtitle,
+                'link' => $banner->link,
+                'position' => $banner->position,
+                'status' => $banner->status,
+                'image_url' => $banner->image
+                    ? asset('storage/' . $banner->image)
+                    : null,
+            ]
         ]);
     }
 
@@ -117,7 +129,8 @@ class AdminBannerController extends Controller
             'position' => $request->position ?? 1,
             'status' => $request->status ?? true,
             'start_date' => $request->start_date,
-            'end_date' => $request->end_date
+            'end_date' => $request->end_date,
+            'image' => $imagePath
         ]);
 
         // sync products
@@ -149,6 +162,12 @@ class AdminBannerController extends Controller
                 'message' => 'Banner not found'
             ], 404);
         }
+        if (!$banner) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Banner not found'
+            ], 404);
+        }
 
         $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -156,13 +175,10 @@ class AdminBannerController extends Controller
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'link' => 'nullable|string',
-            'layout' => 'nullable|in:grid,highlight,carousel',
             'position' => 'nullable|integer',
             'status' => 'sometimes|boolean',
             'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
-            'products' => 'nullable|array',
-            'products.*' => 'exists:products,id'
+            'end_date' => 'nullable|date|after_or_equal:start_date',            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
 
         $data = $request->only([
@@ -170,7 +186,6 @@ class AdminBannerController extends Controller
             'subtitle',
             'description',
             'link',
-            'layout',
             'position',
             'status',
             'start_date',
