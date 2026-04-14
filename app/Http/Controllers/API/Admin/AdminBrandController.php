@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\Controller;
@@ -8,19 +9,39 @@ use Illuminate\Support\Str;
 
 class AdminBrandController extends Controller
 {
-    // ✅ GET ALL
+    // ===============================
+    // ✅ GET ALL (ADMIN - NO FILTER)
+    // ===============================
     public function index(Request $request)
     {
         $query = Brand::query();
 
+        // 🔍 Search (keep this only)
         if ($request->search) {
             $query->where('name', 'like', '%' . $request->search . '%');
         }
 
-        return response()->json($query->latest()->paginate(10));
+        return response()->json(
+            $query->latest()->paginate(10)
+        );
     }
 
+    // ===============================
+    // ✅ GET ONLY ACTIVE (FOR DROPDOWN)
+    // ===============================
+    public function activeBrands()
+    {
+        $brands = Brand::where('status', 1)
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json($brands);
+    }
+
+    // ===============================
     // ✅ STORE
+    // ===============================
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -30,21 +51,17 @@ class AdminBrandController extends Controller
             'status' => 'nullable|boolean'
         ]);
 
-        // slug generate
         $validated['slug'] = $validated['slug'] ?? Str::slug($validated['name']);
 
-        // ✅ FILE UPLOAD (manual like avatar)
         if ($request->hasFile('logo')) {
-
             $file = $request->file('logo');
 
-            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+            $originalName = Str::slug(
+                pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)
+            );
+
             $extension = $file->getClientOriginalExtension();
 
-            // clean filename (important)
-            $originalName = Str::slug($originalName);
-
-            // example: 5_nike-logo.png
             $filename = $request->user()->id . '_' . $originalName . '.' . $extension;
 
             $destination = public_path('uploads/brands');
@@ -56,8 +73,6 @@ class AdminBrandController extends Controller
             $file->move($destination, $filename);
 
             $validated['logo'] = 'uploads/brands/' . $filename;
-
-
         }
 
         $brand = Brand::create($validated);
@@ -65,20 +80,24 @@ class AdminBrandController extends Controller
         return response()->json([
             'message' => 'Brand created successfully',
             'data' => $brand,
-            'logo_url' => isset($validated['logo']) ? url($validated['logo']) : null
+            'logo_url' => isset($validated['logo']) ? asset($validated['logo']) : null
         ], 201);
     }
 
+    // ===============================
     // ✅ SHOW
+    // ===============================
     public function show(Brand $brand)
     {
         return response()->json([
             'data' => $brand,
-            'logo_url' => $brand->logo ? url($brand->logo) : null
+            'logo_url' => $brand->logo ? asset($brand->logo) : null
         ]);
     }
 
+    // ===============================
     // ✅ UPDATE
+    // ===============================
     public function update(Request $request, Brand $brand)
     {
         $validated = $request->validate([
@@ -88,23 +107,19 @@ class AdminBrandController extends Controller
             'status' => 'nullable|boolean'
         ]);
 
-        // slug update
         if (isset($validated['name']) && !isset($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
         }
 
-        // ✅ FILE UPDATE (same logic as store)
         if ($request->hasFile('logo')) {
-
             $file = $request->file('logo');
 
-            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+            $originalName = Str::slug(
+                pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)
+            );
+
             $extension = $file->getClientOriginalExtension();
 
-            // clean filename
-            $originalName = Str::slug($originalName);
-
-            // consistent naming
             $filename = $request->user()->id . '_' . $originalName . '_' . time() . '.' . $extension;
 
             $destination = public_path('uploads/brands');
@@ -113,7 +128,7 @@ class AdminBrandController extends Controller
                 mkdir($destination, 0755, true);
             }
 
-            // delete old logo
+            // delete old
             if ($brand->logo && file_exists(public_path($brand->logo))) {
                 unlink(public_path($brand->logo));
             }
@@ -128,13 +143,15 @@ class AdminBrandController extends Controller
         return response()->json([
             'message' => 'Brand updated successfully',
             'data' => $brand,
-            'logo_url' => $brand->logo ? url($brand->logo) : null
+            'logo_url' => $brand->logo ? asset($brand->logo) : null
         ]);
     }
+
+    // ===============================
     // ✅ DELETE
+    // ===============================
     public function destroy(Brand $brand)
     {
-        // delete logo file
         if ($brand->logo && file_exists(public_path($brand->logo))) {
             unlink(public_path($brand->logo));
         }

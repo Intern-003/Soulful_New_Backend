@@ -321,9 +321,8 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
 
             Route::post('/', [AdminBrandController::class, 'store']);
             Route::get('/{brand}', [AdminBrandController::class, 'show']);
-            Route::post('/{brand}', [AdminBrandController::class, 'update']); // for form-data
+            Route::put('/{brand}', [AdminBrandController::class, 'update']); // for form-data
             Route::delete('/{brand}', [AdminBrandController::class, 'destroy']);
-
         });
 
         // Admin Analytics
@@ -401,3 +400,4 @@ Route::get('/admin/attributes-with-values', [AdminAttributeController::class, 'i
 Route::get('/health', function () {
     return response()->json(['status' => 'ok', 'timestamp' => now()]);
 });
+            Route::get('/brands/active', [AdminBrandController::class, 'activeBrands']);
