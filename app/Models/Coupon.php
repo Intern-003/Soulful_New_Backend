@@ -9,7 +9,7 @@ class Coupon extends Model
     use HasFactory;
 
     protected $fillable = [
-        'vendor_id','code','type','value','min_order_amount','max_discount',
+        'vendor_id','creator_id','code','type','value','min_order_amount','max_discount',
         'usage_limit','used_count','start_date','expiry_date','status'
     ];
 
@@ -20,4 +20,11 @@ class Coupon extends Model
     ];
 
     public function vendor() { return $this->belongsTo(Vendor::class); }
+
+    public function creator()
+{
+    return $this->belongsTo(User::class, 'creator_id');
+}
+
+
 }

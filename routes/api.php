@@ -240,6 +240,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/vendor/coupons', [VendorCouponController::class, 'store'])->middleware('permission:coupon.create');
     Route::put('/vendor/coupons/{id}', [VendorCouponController::class, 'update'])->middleware('permission:coupon.update');
     Route::delete('/vendor/coupons/{id}', [VendorCouponController::class, 'destroy'])->middleware('permission:coupon.delete');
+    Route::get('/vendor/coupons', [VendorCouponController::class, 'index'])
+    ->middleware('permission:coupon.view');
+
+Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
+    ->middleware('permission:coupon.view');
 
     // ==================== VENDOR WALLET & ORDERS (With wallet and order permissions) ====================
     Route::post('/wallet/withdraw', [VendorWalletController::class, 'withdraw'])->middleware('permission:wallet.withdraw');
