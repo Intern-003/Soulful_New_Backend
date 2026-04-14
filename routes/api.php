@@ -319,11 +319,11 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
 
         Route::prefix('brands')->group(function () {
 
-            Route::post('/', [AdminBrandController::class, 'store']);
-            Route::get('/{brand}', [AdminBrandController::class, 'show']);
-            Route::put('/{brand}', [AdminBrandController::class, 'update']); // for form-data
-            Route::delete('/{brand}', [AdminBrandController::class, 'destroy']);
-        });
+     Route::get('/', [AdminBrandController::class, 'index']);
+    Route::post('/', [AdminBrandController::class, 'store']);
+    Route::put('/{brand}', [AdminBrandController::class, 'update']);
+    Route::delete('/{brand}', [AdminBrandController::class, 'destroy']);
+});
 
         // Admin Analytics
         Route::prefix('analytics')->group(function () {
@@ -400,4 +400,7 @@ Route::get('/admin/attributes-with-values', [AdminAttributeController::class, 'i
 Route::get('/health', function () {
     return response()->json(['status' => 'ok', 'timestamp' => now()]);
 });
-            Route::get('/brands/active', [AdminBrandController::class, 'activeBrands']);
+
+Route::get('/brands/active', [AdminBrandController::class, 'activeBrands']);
+Route::get('/brands/category/{id}', [AdminBrandController::class, 'getBrandsByCategory']);
+    Route::get('brands/{brand}', [AdminBrandController::class, 'show']);
