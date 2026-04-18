@@ -9,34 +9,41 @@ use Illuminate\Http\Request;
 class ProductController extends Controller
 {
     // =========================
-    // BASE PRODUCT QUERY (REUSABLE)
+    // BASE PRODUCT QUERY
     // =========================
     private function baseProductQuery()
     {
         return Product::select('products.*')
-            // ⭐ average rating
             ->selectRaw('(
                 SELECT AVG(rating)
                 FROM reviews
                 WHERE reviews.product_id = products.id
                 AND reviews.status = 1
             ) as average_rating')
-
-            // ⭐ total reviews
             ->selectRaw('(
                 SELECT COUNT(*)
                 FROM reviews
                 WHERE reviews.product_id = products.id
                 AND reviews.status = 1
             ) as total_reviews')
-
             ->with(['category', 'brand', 'images', 'variants'])
             ->where('status', 1)
             ->where('approval_status', 'approved');
     }
 
     // =========================
-    // GET /products
+    // SAFE PRODUCT QUERY
+    // =========================
+    private function safeProductQuery()
+    {
+        return Product::select('products.*')
+            ->with(['category', 'brand', 'images', 'variants'])
+            ->where('status', 1)
+            ->where('approval_status', 'approved');
+    }
+
+    // =========================
+    // INDEX
     // =========================
     public function index(Request $request)
     {
@@ -54,117 +61,101 @@ class ProductController extends Controller
             $query->where('price', '<=', $request->price_max);
         }
 
-        $products = $query->paginate(10);
-
         return response()->json([
             'success' => true,
-            'data' => $products
+            'data' => $query->paginate(10)
         ]);
     }
 
     // =========================
-    // GET /products/{slug}
+    // SHOW PRODUCT
     // =========================
-    // public function show($slug)
-    // {
-    //     $product = $this->baseProductQuery()
-    //         ->with([
-    //             'reviews' => function ($q) {
-    //                 $q->where('status', 1)
-    //                     ->latest()
-    //                     ->with('user:id,name');
-    //             },
-    //             'vendor',
-    //             'variants.attributeValues.attribute',
-    //             'specifications'
-    //         ])
-    //         ->where('slug', $slug)
-    //         ->firstOrFail();
+    public function show($identifier)
+    {
+        $product = $this->safeProductQuery()
+            ->with([
+                'reviews' => function ($q) {
+                    $q->where('status', 1)
+                        ->latest()
+                        ->with('user:id,name');
+                },
+                'vendor',
+                'variants.attributeValues.attribute',
+                'variants.images',
+                'specifications'
+            ])
+            ->where(function ($query) use ($identifier) {
+                $query->where('slug', $identifier)
+                    ->orWhere('id', $identifier);
+            })
+            ->firstOrFail();
 
-    //     // =========================
-    //     // VARIANT TRANSFORMATION (KEEP RAW IMAGE)
-    //     // =========================
-    //     if ($product->variants) {
-    //         $product->variants->transform(function ($variant) {
+        // =========================
+        // PRODUCT RATINGS
+        // =========================
+        $product->average_rating = $product->reviews->avg('rating');
+        $product->total_reviews = $product->reviews->count();
 
-    //             $grouped = [];
-
-    //             foreach ($variant->attributeValues as $value) {
-    //                 $grouped[$value->attribute->name] = $value->value;
-    //             }
-
-    //             $variant->attributes = $grouped;
-
-    //             unset($variant->attributeValues);
-
-    //             return $variant;
-    //         });
-    //     }
-
-    //     return response()->json([
-    //         'success' => true,
-    //         'data' => $product
-    //     ]);
-    // }
-private function safeProductQuery()
-{
-    return Product::select('products.*')
-        ->with(['category', 'brand', 'images', 'variants']);
-}
- public function show($identifier)
-{
-    $product = $this->safeProductQuery()
-        ->with([
-            'reviews' => function ($q) {
-                $q->where('status', 1)
-                    ->latest()
-                    ->with('user:id,name');
-            },
-            'vendor',
-            'variants.attributeValues.attribute',
-            'specifications'
-        ])
-        ->where(function ($query) use ($identifier) {
-            $query->where('slug', $identifier)
-                  ->orWhere('id', $identifier);
-        })
-        ->firstOrFail();
-
-    if ($product->variants) {
+        // =========================
+        // FORMAT VARIANTS
+        // =========================
         $product->variants->transform(function ($variant) {
+
+            // -------- ATTRIBUTES --------
             $grouped = [];
 
             foreach ($variant->attributeValues as $value) {
-                $grouped[$value->attribute->name] = $value->value;
+                $grouped[$value->attribute->name][] = [
+                    'value' => $value->value,
+                    'hex'   => $value->hex_code
+                ];
             }
 
             $variant->attributes = $grouped;
             unset($variant->attributeValues);
 
+            // -------- IMAGES --------
+            $variant->images->transform(function ($img) {
+                $img->image_url = url($img->image);
+                return $img;
+            });
+
+            // -------- PRIMARY IMAGE --------
+            $primary = $variant->images->firstWhere('is_primary', 1);
+
+            $variant->primary_image = $primary
+                ? $primary->image_url
+                : ($variant->images->first()->image_url ?? null);
+
             return $variant;
         });
+
+        // =========================
+        // PRODUCT IMAGES
+        // =========================
+        if ($product->images) {
+            $product->images->transform(function ($img) {
+                $img->image_url = url($img->image);
+                return $img;
+            });
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $product
+        ]);
     }
-
-    return response()->json([
-        'success' => true,
-        'data' => $product
-    ]);
-
-
-}
 
     // =========================
     // SEARCH
     // =========================
     public function search(Request $request)
     {
-        $products = $this->baseProductQuery()
-            ->where('name', 'LIKE', "%{$request->q}%")
-            ->paginate(10);
-
         return response()->json([
             'success' => true,
-            'data' => $products
+            'data' => $this->baseProductQuery()
+                ->where('name', 'LIKE', "%{$request->q}%")
+                ->paginate(10)
         ]);
     }
 
@@ -173,14 +164,12 @@ private function safeProductQuery()
     // =========================
     public function featured()
     {
-        $products = $this->baseProductQuery()
-            ->where('is_featured', 1)
-            ->take(10)
-            ->get();
-
         return response()->json([
             'success' => true,
-            'data' => $products
+            'data' => $this->baseProductQuery()
+                ->where('is_featured', 1)
+                ->take(10)
+                ->get()
         ]);
     }
 
@@ -189,14 +178,12 @@ private function safeProductQuery()
     // =========================
     public function latest()
     {
-        $products = $this->baseProductQuery()
-            ->latest()
-            ->take(10)
-            ->get();
-
         return response()->json([
             'success' => true,
-            'data' => $products
+            'data' => $this->baseProductQuery()
+                ->latest()
+                ->take(10)
+                ->get()
         ]);
     }
 
@@ -205,13 +192,11 @@ private function safeProductQuery()
     // =========================
     public function deals()
     {
-        $products = $this->baseProductQuery()
-            ->whereNotNull('discount_price')
-            ->get();
-
         return response()->json([
             'success' => true,
-            'data' => $products
+            'data' => $this->baseProductQuery()
+                ->whereNotNull('discount_price')
+                ->get()
         ]);
     }
 
@@ -220,14 +205,12 @@ private function safeProductQuery()
     // =========================
     public function bestSellers()
     {
-        $products = $this->baseProductQuery()
-            ->orderBy('stock', 'DESC')
-            ->take(10)
-            ->get();
-
         return response()->json([
             'success' => true,
-            'data' => $products
+            'data' => $this->baseProductQuery()
+                ->orderBy('stock', 'DESC')
+                ->take(10)
+                ->get()
         ]);
     }
 
@@ -238,76 +221,13 @@ private function safeProductQuery()
     {
         $product = Product::findOrFail($id);
 
-        $related = $this->baseProductQuery()
-            ->where('category_id', $product->category_id)
-            ->where('id', '!=', $id)
-            ->take(8)
-            ->get();
-
         return response()->json([
             'success' => true,
-            'data' => $related
-        ]);
-    }
-
-    // =========================
-    // RELATED BULK
-    // =========================
-    public function relatedBulk(Request $request)
-    {
-        if (!$request->ids) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Product IDs are required'
-            ], 400);
-        }
-
-        $ids = explode(',', $request->ids);
-
-        $products = Product::whereIn('id', $ids)->get();
-
-        if ($products->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No valid products found'
-            ], 404);
-        }
-
-        $categoryIds = $products->pluck('category_id')->unique();
-        $brandIds = $products->pluck('brand_id')->unique();
-        $avgPrice = $products->avg('price');
-
-        $minPrice = $avgPrice * 0.7;
-        $maxPrice = $avgPrice * 1.3;
-
-        $related = $this->baseProductQuery()
-            ->where(function ($q) use ($categoryIds, $brandIds) {
-                $q->whereIn('category_id', $categoryIds)
-                  ->orWhereIn('brand_id', $brandIds);
-            })
-            ->whereNotIn('id', $ids)
-            ->whereBetween('price', [$minPrice, $maxPrice])
-            ->take(12)
-            ->get();
-
-        if ($related->isEmpty()) {
-            $related = $this->baseProductQuery()
-                ->whereIn('category_id', $categoryIds)
-                ->whereNotIn('id', $ids)
-                ->take(12)
-                ->get();
-        }
-
-        if ($related->isEmpty()) {
-            $related = $this->baseProductQuery()
-                ->latest()
-                ->take(12)
-                ->get();
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => $related
+            'data' => $this->baseProductQuery()
+                ->where('category_id', $product->category_id)
+                ->where('id', '!=', $id)
+                ->take(8)
+                ->get()
         ]);
     }
 
@@ -320,6 +240,11 @@ private function safeProductQuery()
             ->orderBy('sort_order')
             ->get();
 
+        $images->transform(function ($img) {
+            $img->image_url = url($img->image);
+            return $img;
+        });
+
         return response()->json([
             'success' => true,
             'data' => $images
@@ -331,14 +256,12 @@ private function safeProductQuery()
     // =========================
     public function reviews($id)
     {
-        $reviews = \App\Models\Review::where('product_id', $id)
-            ->where('status', 1)
-            ->latest()
-            ->get();
-
         return response()->json([
             'success' => true,
-            'data' => $reviews
+            'data' => \App\Models\Review::where('product_id', $id)
+                ->where('status', 1)
+                ->latest()
+                ->get()
         ]);
     }
 
@@ -347,13 +270,14 @@ private function safeProductQuery()
     // =========================
     public function rating($id)
     {
-        $rating = \App\Models\Review::where('product_id', $id)
-            ->where('status', 1)
-            ->avg('rating');
-
         return response()->json([
             'success' => true,
-            'rating' => round($rating, 1)
+            'rating' => round(
+                \App\Models\Review::where('product_id', $id)
+                    ->where('status', 1)
+                    ->avg('rating'),
+                1
+            )
         ]);
     }
 }
