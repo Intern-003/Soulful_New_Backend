@@ -124,8 +124,10 @@ Route::prefix('products')->group(function () {
     Route::get('/{id}/images', [ProductController::class, 'images']);
     Route::get('/{id}/reviews', [ProductController::class, 'reviews']);
     Route::get('/{id}/rating', [ProductController::class, 'rating']);
+    Route::get('/{identifier}', [ProductController::class, 'show'])
+    ->where('identifier', '[0-9a-zA-Z\-]+');
 
-    Route::get('/{slug}', [ProductController::class, 'show']);
+    // Route::get('/{identifier}', [ProductController::class, 'show']);
 });
 
 // ==================== VENDOR STORE ROUTES (With vendor view permissions) ====================
@@ -240,6 +242,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/vendor/coupons', [VendorCouponController::class, 'store'])->middleware('permission:coupon.create');
     Route::put('/vendor/coupons/{id}', [VendorCouponController::class, 'update'])->middleware('permission:coupon.update');
     Route::delete('/vendor/coupons/{id}', [VendorCouponController::class, 'destroy'])->middleware('permission:coupon.delete');
+    Route::get('/vendor/coupons', [VendorCouponController::class, 'index'])
+    ->middleware('permission:coupon.view');
+
+Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
+    ->middleware('permission:coupon.view');
 
     // ==================== VENDOR WALLET & ORDERS (With wallet and order permissions) ====================
     Route::post('/wallet/withdraw', [VendorWalletController::class, 'withdraw'])->middleware('permission:wallet.withdraw');
@@ -305,15 +312,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         // Admin Banner Management
         Route::get('/banners/{id}', [AdminBannerController::class, 'getBanner']);
-        Route::post('/banners', [AdminBannerController::class, 'store'])->middleware('permission:banner.create');
-        Route::put('/banners/{id}', [AdminBannerController::class, 'updateBanner'])->middleware('permission:banner.update');
-        Route::delete('/banners/{id}', [AdminBannerController::class, 'deleteBanner'])->middleware('permission:banner.delete');
+        Route::post('/banners', [AdminBannerController::class, 'store']);
+        Route::put('/banners/{id}', [AdminBannerController::class, 'updateBanner']);
+        Route::delete('/banners/{id}', [AdminBannerController::class, 'deleteBanner']);
 
 
 
 
         Route::prefix('brands')->group(function () {
-
             Route::post('/', [AdminBrandController::class, 'store']);
             Route::get('/{brand}', [AdminBrandController::class, 'show']);
             Route::post('/{brand}', [AdminBrandController::class, 'update']); // for form-data
@@ -396,3 +402,7 @@ Route::get('/admin/attributes-with-values', [AdminAttributeController::class, 'i
 Route::get('/health', function () {
     return response()->json(['status' => 'ok', 'timestamp' => now()]);
 });
+
+Route::get('/brands/active', [AdminBrandController::class, 'activeBrands']);
+Route::get('/brands/category/{id}', [AdminBrandController::class, 'getBrandsByCategory']);
+    Route::get('brands/{brand}', [AdminBrandController::class, 'show']);

@@ -1,51 +1,94 @@
 <?php
+
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
+use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class AdminBrandController extends Controller
 {
-    // ✅ GET ALL
+    // ===============================
+    // ✅ GET ALL (ADMIN)
+    // ===============================
     public function index(Request $request)
     {
-        $query = Brand::query();
+        $query = Brand::with([
+            'subcategories:id,name,parent_id'
+        ]);
 
         if ($request->search) {
             $query->where('name', 'like', '%' . $request->search . '%');
         }
 
-        return response()->json($query->latest()->paginate(10));
+        return response()->json(
+            $query->latest()->paginate(10)
+        );
     }
 
+    // ===============================
+    // ✅ GET ONLY ACTIVE (PUBLIC)
+    // ===============================
+    public function activeBrands()
+    {
+        return response()->json(
+            Brand::where('status', 1)
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get()
+        );
+    }
+
+    // ===============================
+    // ✅ GET BRANDS BY CATEGORY (MAIN LOGIC)
+    // ===============================
+    public function getBrandsByCategory($categoryId)
+{
+    // Check if this category has children
+    $childIds = Category::where('parent_id', $categoryId)->pluck('id');
+
+    if ($childIds->count() > 0) {
+        // 🔥 Parent category → use children
+        $subcategoryIds = $childIds;
+    } else {
+        // 🔥 Subcategory → use itself
+        $subcategoryIds = collect([$categoryId]);
+    }
+
+    $brands = Brand::whereHas('subcategories', function ($q) use ($subcategoryIds) {
+        $q->whereIn('categories.id', $subcategoryIds);    })
+    ->with('subcategories:id,name,parent_id')
+    ->get();
+
+    return response()->json([
+        'data' => $brands
+    ]);
+}
+    // ===============================
     // ✅ STORE
+    // ===============================
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|unique:brands,slug',
             'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'nullable|boolean'
+            'status' => 'nullable|boolean',
+            'subcategory_ids' => 'nullable|array',
+            'subcategory_ids.*' => 'exists:categories,id'
         ]);
 
-        // slug generate
         $validated['slug'] = $validated['slug'] ?? Str::slug($validated['name']);
 
-        // ✅ FILE UPLOAD (manual like avatar)
+        // ================= FILE UPLOAD =================
         if ($request->hasFile('logo')) {
-
             $file = $request->file('logo');
 
-            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
-            $extension = $file->getClientOriginalExtension();
-
-            // clean filename (important)
-            $originalName = Str::slug($originalName);
-
-            // example: 5_nike-logo.png
-            $filename = $request->user()->id . '_' . $originalName . '.' . $extension;
+            $filename = time() . '_' . Str::slug(
+                pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)
+            ) . '.' . $file->getClientOriginalExtension();
 
             $destination = public_path('uploads/brands');
 
@@ -56,56 +99,59 @@ class AdminBrandController extends Controller
             $file->move($destination, $filename);
 
             $validated['logo'] = 'uploads/brands/' . $filename;
-
-
         }
 
+        // ================= CREATE =================
         $brand = Brand::create($validated);
+
+        // ================= SYNC SUBCATEGORIES =================
+        if ($request->subcategory_ids) {
+            $brand->subcategories()->sync($request->subcategory_ids);
+        }
 
         return response()->json([
             'message' => 'Brand created successfully',
-            'data' => $brand,
-            'logo_url' => isset($validated['logo']) ? url($validated['logo']) : null
+            'data' => $brand->load('subcategories'),
+            'logo_url' => $brand->logo ? asset($brand->logo) : null
         ], 201);
     }
 
+    // ===============================
     // ✅ SHOW
+    // ===============================
     public function show(Brand $brand)
     {
         return response()->json([
-            'data' => $brand,
-            'logo_url' => $brand->logo ? url($brand->logo) : null
+            'data' => $brand->load('subcategories'),
+            'logo_url' => $brand->logo ? asset($brand->logo) : null
         ]);
     }
 
+    // ===============================
     // ✅ UPDATE
+    // ===============================
     public function update(Request $request, Brand $brand)
     {
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'slug' => 'nullable|string|unique:brands,slug,' . $brand->id,
             'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'nullable|boolean'
+            'status' => 'nullable|boolean',
+            'subcategory_ids' => 'nullable|array',
+            'subcategory_ids.*' => 'exists:categories,id'
         ]);
 
-        // slug update
         if (isset($validated['name']) && !isset($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
         }
 
-        // ✅ FILE UPDATE (same logic as store)
+        // ================= FILE UPDATE =================
         if ($request->hasFile('logo')) {
-
             $file = $request->file('logo');
 
-            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
-            $extension = $file->getClientOriginalExtension();
-
-            // clean filename
-            $originalName = Str::slug($originalName);
-
-            // consistent naming
-            $filename = $request->user()->id . '_' . $originalName . '_' . time() . '.' . $extension;
+            $filename = time() . '_' . Str::slug(
+                pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)
+            ) . '.' . $file->getClientOriginalExtension();
 
             $destination = public_path('uploads/brands');
 
@@ -125,16 +171,23 @@ class AdminBrandController extends Controller
 
         $brand->update($validated);
 
+        // ================= SYNC SUBCATEGORIES =================
+        if ($request->has('subcategory_ids')) {
+            $brand->subcategories()->sync($request->subcategory_ids);
+        }
+
         return response()->json([
             'message' => 'Brand updated successfully',
-            'data' => $brand,
-            'logo_url' => $brand->logo ? url($brand->logo) : null
+            'data' => $brand->load('subcategories'),
+            'logo_url' => $brand->logo ? asset($brand->logo) : null
         ]);
     }
+
+    // ===============================
     // ✅ DELETE
+    // ===============================
     public function destroy(Brand $brand)
     {
-        // delete logo file
         if ($brand->logo && file_exists(public_path($brand->logo))) {
             unlink(public_path($brand->logo));
         }
