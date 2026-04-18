@@ -1,85 +1,101 @@
 <?php
+
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketReply;
+use Illuminate\Support\Facades\Auth;
 
 class AdminSupportController extends Controller
 {
-    // List all tickets (with optional filters)
+    // ===============================
+    // ✅ ALL TICKETS
+    // ===============================
     public function index(Request $request)
     {
-        $query = SupportTicket::with('user', 'replies');
+        $query = SupportTicket::with('user');
 
-        // Optional: filter by status
-        if ($request->has('status')) {
+        if ($request->status) {
             $query->where('status', $request->status);
         }
 
-        $tickets = $query->orderBy('created_at', 'desc')->get();
+        $tickets = $query->latest()->get();
 
         return response()->json([
             'success' => true,
-            'tickets' => $tickets
+            'data' => $tickets
         ]);
     }
 
-    // View a single ticket with replies
+    // ===============================
+    // ✅ SINGLE TICKET (CHAT)
+    // ===============================
     public function show($id)
     {
-        $ticket = SupportTicket::with('user', 'replies')->findOrFail($id);
+        $ticket = SupportTicket::with([
+            'user',
+            'replies' => function ($q) {
+                $q->orderBy('created_at', 'asc');
+            }
+        ])->findOrFail($id);
 
         return response()->json([
             'success' => true,
-            'ticket' => $ticket
+            'data' => $ticket
         ]);
     }
 
-    // Admin reply to a ticket
+    // ===============================
+    // ✅ ADMIN REPLY
+    // ===============================
     public function reply(Request $request, $id)
     {
-        $ticket = SupportTicket::findOrFail($id);
-
         $request->validate([
             'message' => 'required|string'
         ]);
 
+        $ticket = SupportTicket::findOrFail($id);
+
         $reply = SupportTicketReply::create([
             'ticket_id' => $ticket->id,
-            'user_id' => null, // admin reply, so null
+            'user_id' => Auth::id(), // ✅ FIXED (no null)
             'message' => $request->message,
             'type' => 'admin'
         ]);
 
-        // Optionally, set ticket status to 'pending' if it's still open
-        if ($ticket->status == 'open') {
-            $ticket->status = 'pending';
-            $ticket->save();
-        }
+        // update status
+        $ticket->update([
+            'status' => 'pending'
+        ]);
 
         return response()->json([
             'success' => true,
-            'reply' => $reply
+            'message' => 'Reply sent',
+            'data' => $reply
         ]);
     }
 
-    // Change ticket status (open, pending, closed)
+    // ===============================
+    // ✅ UPDATE STATUS
+    // ===============================
     public function updateStatus(Request $request, $id)
     {
-        $ticket = SupportTicket::findOrFail($id);
-
         $request->validate([
             'status' => 'required|in:open,pending,closed'
         ]);
 
-        $ticket->status = $request->status;
-        $ticket->save();
+        $ticket = SupportTicket::findOrFail($id);
+
+        $ticket->update([
+            'status' => $request->status
+        ]);
 
         return response()->json([
             'success' => true,
-            'ticket' => $ticket
+            'message' => 'Status updated',
+            'data' => $ticket
         ]);
     }
 }

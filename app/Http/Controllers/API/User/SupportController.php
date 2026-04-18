@@ -10,27 +10,63 @@ use Illuminate\Support\Facades\Auth;
 
 class SupportController extends Controller
 {
-    // Create ticket
-    public function store(Request $request) {
-        $request->validate([
-            'subject' => 'required|string|max:255',
-            'description' => 'required|string'
-        ]);
+    // ===============================
+    // ✅ CREATE TICKET
+    // ===============================
+public function store(Request $request)
+{
+    $request->validate([
+        'subject' => 'required|string|max:255',
+        'description' => 'required|string'
+    ]);
 
-        $ticket = SupportTicket::create([
-            'user_id' => Auth::id(),
-            'subject' => $request->subject,
-            'description' => $request->description,
-        ]);
+    // 🚫 CHECK ACTIVE TICKET
+    $activeTicket = SupportTicket::where('user_id', Auth::id())
+        ->whereIn('status', ['open', 'pending'])
+        ->exists();
 
-        return response()->json(['success'=>true, 'ticket'=>$ticket]);
+    if ($activeTicket) {
+        return response()->json([
+            'success' => false,
+            'message' => 'You already have an active ticket. Please wait until it is closed.'
+        ], 400);
     }
 
-    // Reply to ticket
-    public function reply(Request $request, $id) {
-        $ticket = SupportTicket::where('id', $id)->where('user_id', Auth::id())->firstOrFail();
+    // ✅ CREATE TICKET
+    $ticket = SupportTicket::create([
+        'user_id' => Auth::id(),
+        'subject' => $request->subject,
+        'description' => $request->description,
+        'status' => 'open'
+    ]);
 
-        $request->validate(['message'=>'required|string']);
+    // ✅ FIRST MESSAGE
+    SupportTicketReply::create([
+        'ticket_id' => $ticket->id,
+        'user_id' => Auth::id(),
+        'message' => $request->description,
+        'type' => 'user'
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Ticket created successfully',
+        'data' => $ticket
+    ]);
+}
+
+    // ===============================
+    // ✅ REPLY
+    // ===============================
+    public function reply(Request $request, $id)
+    {
+        $ticket = SupportTicket::where('id', $id)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
+        $request->validate([
+            'message' => 'required|string'
+        ]);
 
         $reply = SupportTicketReply::create([
             'ticket_id' => $ticket->id,
@@ -39,18 +75,48 @@ class SupportController extends Controller
             'type' => 'user'
         ]);
 
-        return response()->json(['success'=>true, 'reply'=>$reply]);
+        // optional: mark as open again
+        $ticket->update(['status' => 'open']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Reply sent',
+            'data' => $reply
+        ]);
     }
 
-    // List own tickets
-    public function index() {
-        $tickets = SupportTicket::where('user_id', Auth::id())->with('replies')->get();
-        return response()->json($tickets);
+    // ===============================
+    // ✅ LIST USER TICKETS
+    // ===============================
+    public function index()
+    {
+        $tickets = SupportTicket::where('user_id', Auth::id())
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $tickets
+        ]);
     }
 
-    // View single ticket with replies
-    public function show($id) {
-        $ticket = SupportTicket::where('id', $id)->where('user_id', Auth::id())->with('replies')->firstOrFail();
-        return response()->json($ticket);
+    // ===============================
+    // ✅ VIEW SINGLE (CHAT)
+    // ===============================
+    public function show($id)
+    {
+        $ticket = SupportTicket::where('id', $id)
+            ->where('user_id', Auth::id())
+            ->with([
+                'replies' => function ($q) {
+                    $q->orderBy('created_at', 'asc');
+                }
+            ])
+            ->firstOrFail();
+
+        return response()->json([
+            'success' => true,
+            'data' => $ticket
+        ]);
     }
 }
