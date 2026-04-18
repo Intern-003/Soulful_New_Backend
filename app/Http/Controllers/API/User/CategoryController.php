@@ -23,7 +23,6 @@
 //         ]);
 //     }
 
-
 //     // GET /categories/{id}
 //     public function show($id)
 //     {
@@ -37,7 +36,6 @@
 //             'data' => $category
 //         ]);
 //     }
-
 
 //     // GET /categories/{id}/children
 //     public function children($id)
@@ -86,11 +84,7 @@
 //     ]);
 // }
 
-// }  
-
-
-
-
+// }
 
 namespace App\Http\Controllers\API\User;
 
@@ -112,12 +106,13 @@ class CategoryController extends Controller
             ->get()
             ->map(function ($category) {
                 $category->children = $this->getNestedChildren($category->id);
+
                 return $category;
             });
 
         return response()->json([
             'success' => true,
-            'data' => $categories
+            'data' => $categories,
         ]);
     }
 
@@ -134,7 +129,7 @@ class CategoryController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $category
+            'data' => $category,
         ]);
     }
 
@@ -145,7 +140,7 @@ class CategoryController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $this->getNestedChildren($id)
+            'data' => $this->getNestedChildren($id),
         ]);
     }
 
@@ -177,7 +172,7 @@ class CategoryController extends Controller
         return response()->json([
             'success' => true,
             'category' => $category->name,
-            'data' => $products
+            'data' => $products,
         ]);
     }
 
@@ -193,6 +188,7 @@ class CategoryController extends Controller
 
         return $children->map(function ($child) {
             $child->children = $this->getNestedChildren($child->id);
+
             return $child;
         });
     }
@@ -215,4 +211,3 @@ class CategoryController extends Controller
         return $ids;
     }
 }
-
