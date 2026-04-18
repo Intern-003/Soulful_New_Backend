@@ -12,4 +12,19 @@ class Brand extends Model
     protected $casts = ['status' => 'boolean'];
 
     public function products() { return $this->hasMany(Product::class); }
+    public function categories()
+{
+    return $this->belongsToMany(Category::class, 'brand_category');
+}
+// App\Models\Brand.php
+
+public function subcategories()
+{
+    return $this->belongsToMany(
+        Category::class,
+        'brand_subcategory',
+        'brand_id',
+        'subcategory_id'
+    )->whereNotNull('parent_id'); // 🔥 ensures only subcategories
+}
 }

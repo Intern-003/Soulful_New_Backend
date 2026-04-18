@@ -403,5 +403,6 @@ Route::get('/health', function () {
     return response()->json(['status' => 'ok', 'timestamp' => now()]);
 });
 
-
-  
+Route::get('/brands/active', [AdminBrandController::class, 'activeBrands']);
+Route::get('/brands/category/{id}', [AdminBrandController::class, 'getBrandsByCategory']);
+    Route::get('brands/{brand}', [AdminBrandController::class, 'show']);
