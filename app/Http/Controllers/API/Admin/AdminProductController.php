@@ -35,38 +35,30 @@ class AdminProductController extends Controller
     }
 
     // ✅ OPTIMIZED: Single endpoint for Approve/Reject toggle
-    public function toggleApproval($id)
+    public function toggleApproval(Request $request, $id)
     {
-        $product = Product::with(['user', 'vendor'])->findOrFail($id);
-
-        // Toggle approval status
-        $newApprovalStatus = !$product->is_approved;
-
-        $product->update([
-            'is_approved' => $newApprovalStatus,
-            'approved_by' => auth()->id(),
-            'approved_at' => now(),
-            'status' => $newApprovalStatus ? 1 : 0, // If approved, set active; if rejected, set inactive
+        $request->validate([
+            'action' => 'required|in:approve,reject',
+            'commission' => 'nullable|numeric',
+            'rejection_reason' => 'nullable|string'
         ]);
 
-        // Send notification based on new status
-        $status = $newApprovalStatus ? 'approved' : 'rejected';
+        $product = Product::findOrFail($id);
 
-        if ($product->user) {
-            $product->user->notify(new ProductStatusNotification($product, $status));
-        }
-        if ($product->vendor && $product->vendor->user) {
-            $product->vendor->user->notify(new ProductStatusNotification($product, $status));
-        }
+        $status = $request->action === 'approve' ? 'approved' : 'rejected';
+
+        $product->update([
+            'approval_status' => $status,
+            'commission' => $request->commission,
+            'rejection_reason' => $request->rejection_reason,
+            'status' => $status === 'approved' ? 1 : 0,
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => $newApprovalStatus ? 'Product approved successfully' : 'Product rejected successfully',
-            'data' => [
-                'id' => $product->id,
-                'is_approved' => $product->is_approved,
-                'status' => $product->status
-            ]
+            'message' => "Product {$status} successfully"
         ]);
     }
 
@@ -107,8 +99,7 @@ class AdminProductController extends Controller
             'action' => 'required|in:approve,reject'
         ]);
 
-        $isApproved = $request->action === 'approve' ? 1 : 0;
-
+        $status = $request->action === 'approve' ? 'approved' : 'rejected';
 
         $products = Product::with(['user', 'vendor.user'])
             ->whereIn('id', $request->ids)
@@ -116,13 +107,13 @@ class AdminProductController extends Controller
 
         foreach ($products as $product) {
             $product->update([
-                'is_approved' => $isApproved,
+                'approval_status' => $status,
+                'commission' => $request->commission,
+                'rejection_reason' => $request->rejection_reason,
+                'status' => $status === 'approved' ? 1 : 0,
                 'approved_by' => auth()->id(),
                 'approved_at' => now(),
-                'status' => $isApproved,
             ]);
-
-            $status = $isApproved ? 'approved' : 'rejected';
 
             if ($product->user) {
                 $product->user->notify(new ProductStatusNotification($product, $status));
@@ -132,7 +123,6 @@ class AdminProductController extends Controller
                 $product->vendor->user->notify(new ProductStatusNotification($product, $status));
             }
         }
-
 
         return response()->json([
             'success' => true,

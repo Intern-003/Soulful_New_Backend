@@ -124,8 +124,10 @@ Route::prefix('products')->group(function () {
     Route::get('/{id}/images', [ProductController::class, 'images']);
     Route::get('/{id}/reviews', [ProductController::class, 'reviews']);
     Route::get('/{id}/rating', [ProductController::class, 'rating']);
+    Route::get('/{identifier}', [ProductController::class, 'show'])
+    ->where('identifier', '[0-9a-zA-Z\-]+');
 
-    Route::get('/{slug}', [ProductController::class, 'show']);
+    // Route::get('/{identifier}', [ProductController::class, 'show']);
 });
 
 // ==================== VENDOR STORE ROUTES (With vendor view permissions) ====================
@@ -310,20 +312,20 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
 
         // Admin Banner Management
         Route::get('/banners/{id}', [AdminBannerController::class, 'getBanner']);
-        Route::post('/banners', [AdminBannerController::class, 'store'])->middleware('permission:banner.create');
-        Route::put('/banners/{id}', [AdminBannerController::class, 'updateBanner'])->middleware('permission:banner.update');
-        Route::delete('/banners/{id}', [AdminBannerController::class, 'deleteBanner'])->middleware('permission:banner.delete');
+        Route::post('/banners', [AdminBannerController::class, 'store']);
+        Route::put('/banners/{id}', [AdminBannerController::class, 'updateBanner']);
+        Route::delete('/banners/{id}', [AdminBannerController::class, 'deleteBanner']);
 
 
 
 
         Route::prefix('brands')->group(function () {
+            Route::post('/', [AdminBrandController::class, 'store']);
+            Route::get('/{brand}', [AdminBrandController::class, 'show']);
+            Route::post('/{brand}', [AdminBrandController::class, 'update']); // for form-data
+            Route::delete('/{brand}', [AdminBrandController::class, 'destroy']);
 
-     Route::get('/', [AdminBrandController::class, 'index']);
-    Route::post('/', [AdminBrandController::class, 'store']);
-    Route::put('/{brand}', [AdminBrandController::class, 'update']);
-    Route::delete('/{brand}', [AdminBrandController::class, 'destroy']);
-});
+        });
 
         // Admin Analytics
         Route::prefix('analytics')->group(function () {
