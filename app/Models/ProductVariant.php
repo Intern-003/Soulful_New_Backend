@@ -16,7 +16,7 @@ class ProductVariant extends Model
         'discount_price',
         'stock',
         'weight',
-        'image'
+       
     ];
 
     public function product()
@@ -38,4 +38,9 @@ class ProductVariant extends Model
             'attribute_id'    // pivot FK for Attribute
         )->withPivot('attribute_value_id');
     }
+
+    public function images()
+{
+    return $this->hasMany(ProductImage::class, 'variant_id');
+}
 }

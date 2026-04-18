@@ -13,7 +13,10 @@ class Banner extends Model
         'title',
         'subtitle',
         'description',
+        'start_date',
+        'end_date',
         'image',
+        'layout',
         'link',
         'position',
         'status'
@@ -23,10 +26,12 @@ class Banner extends Model
         'status' => 'boolean'
     ];
     public function products()
-{
-    return $this->belongsToMany(Product::class, 'banner_products')
-        ->withPivot('position')
-        ->orderBy('banner_products.position');
-}
+    {
+        return $this->belongsToMany(Product::class, 'banner_products')
+            ->withPivot('position')
+            ->orderBy('banner_products.position');
+    }
+
+
 
 }

@@ -81,7 +81,7 @@ class VendorProductController extends Controller
             'height' => $request->height,
             'is_featured' => $request->is_featured ?? 0,
             'status' => 0,
-            'is_approved' => 0,
+            'approval_status' => 'pending',
         ]);
 
         if ($request->has('specifications') && is_array($request->specifications)) {
@@ -149,7 +149,7 @@ class VendorProductController extends Controller
                 'height' => $product->height,  // ✅ ADDED
                 'is_featured' => (bool)$product->is_featured,  // ✅ ADDED
                 'status' => $product->status,
-                'is_approved' => $product->is_approved,
+                'approval_status' => $product->approval_status,
                 'brand_id' => $product->brand_id,  // ✅ ADDED
                 'category_id' => $product->category_id,  // ✅ ADDED
                 'created_at' => $product->created_at,
