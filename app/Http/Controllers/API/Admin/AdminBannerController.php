@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use App\Models\Banner;
 use Illuminate\Support\Facades\File;
 use Carbon\Carbon;
-use Illuminate\Support\Str;
 
 class AdminBannerController extends Controller
 {
@@ -22,20 +21,21 @@ class AdminBannerController extends Controller
         $banners = Banner::with([
             'products' => function ($q) {
                 $q->select('products.id', 'products.name', 'products.price')
-                  ->with(['primaryImage:id,product_id,image_url']);
+                    // ->with(['primaryImage:id,product_id,image_url']);
+                    ->with(['images:id,product_id,image_url,is_primary']);
             }
         ])
-        ->where('status', true)
-        ->where(function ($q) use ($now) {
-            $q->whereNull('start_date')
-              ->orWhere('start_date', '<=', $now);
-        })
-        ->where(function ($q) use ($now) {
-            $q->whereNull('end_date')
-              ->orWhere('end_date', '>=', $now);
-        })
-        ->orderBy('position', 'asc')
-        ->get();
+            ->where('status', true)
+            ->orderBy('position', 'asc')
+            ->where(function ($q) use ($now) {
+                $q->whereNull('start_date')
+                    ->orWhere('start_date', '<=', $now);
+            })
+            ->where(function ($q) use ($now) {
+                $q->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $now);
+            })
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -48,14 +48,14 @@ class AdminBannerController extends Controller
     // ============================
     public function getBanner($id)
     {
-        $banner = Banner::find($id);
 
-        if (!$banner) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Banner not found'
-            ], 404);
-        }
+        //$banner = Banner::with(['products:id,name,price'])->find($id);
+        $banner = Banner::with([
+            'products' => function ($q) {
+                $q->select('products.id', 'products.name', 'products.price')
+                    ->with(['images:id,product_id,image_url,is_primary']);
+            }
+        ])->find($id);
         if (!$banner) {
             return response()->json([
                 'success' => false,
@@ -69,14 +69,15 @@ class AdminBannerController extends Controller
                 'id' => $banner->id,
                 'title' => $banner->title,
                 'subtitle' => $banner->subtitle,
-                'link' => $banner->link,
+                'description' => $banner->description,
+                'image' => $banner->image,
+                'layout' => $banner->layout,
                 'position' => $banner->position,
                 'status' => $banner->status,
-                'image_url' => $banner->image
-                    ? asset('storage/' . $banner->image)
-                    : null,
+                'products' => $banner->products,
             ]
         ]);
+
     }
 
     // ============================
@@ -84,6 +85,8 @@ class AdminBannerController extends Controller
     // ============================
     public function store(Request $request)
     {
+
+        //dd($request->all());
         $request->validate([
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
@@ -95,8 +98,11 @@ class AdminBannerController extends Controller
             'status' => 'nullable|boolean',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
-            'products' => 'nullable|array',
-            'products.*' => 'exists:products,id'
+            // 'products' => 'nullable|array',
+            // 'products.*' => 'exists:products,id'
+            'product_ids' => 'nullable|array',
+            'product_ids.*' => 'exists:products,id'
+
         ]);
 
         $imagePath = null;
@@ -130,16 +136,19 @@ class AdminBannerController extends Controller
             'status' => $request->status ?? true,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
-            'image' => $imagePath
+
         ]);
 
         // sync products
-        if ($request->has('products')) {
-            $syncData = [];
-            foreach ($request->products as $i => $id) {
-                $syncData[$id] = ['position' => $i + 1];
-            }
+        if (!empty($request->product_ids)) {
+
+            $syncData = collect($request->product_ids)
+                ->values()
+                ->mapWithKeys(fn($id, $i) => [$id => ['position' => $i + 1]])
+                ->toArray();
+
             $banner->products()->sync($syncData);
+
         }
 
         return response()->json([
@@ -162,12 +171,6 @@ class AdminBannerController extends Controller
                 'message' => 'Banner not found'
             ], 404);
         }
-        if (!$banner) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Banner not found'
-            ], 404);
-        }
 
         $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -178,13 +181,15 @@ class AdminBannerController extends Controller
             'position' => 'nullable|integer',
             'status' => 'sometimes|boolean',
             'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+
         ]);
 
         $data = $request->only([
             'title',
             'subtitle',
             'description',
+            'layout',
             'link',
             'position',
             'status',
@@ -217,14 +222,14 @@ class AdminBannerController extends Controller
         $banner->update($data);
 
         // sync products
-        if ($request->has('products')) {
-            $syncData = [];
-            foreach ($request->products as $i => $id) {
-                $syncData[$id] = ['position' => $i + 1];
-            }
+        if ($request->has('product_ids')) {
+            $syncData = collect($request->product_ids ?? [])
+                ->values()
+                ->mapWithKeys(fn($id, $i) => [$id => ['position' => $i + 1]])
+                ->toArray();
+
             $banner->products()->sync($syncData);
         }
-
         return response()->json([
             'success' => true,
             'message' => 'Banner updated successfully',
@@ -250,6 +255,8 @@ class AdminBannerController extends Controller
             unlink(public_path($banner->image));
         }
 
+
+        $banner->products()->detach(); // ✅ ADD THIS
         $banner->delete();
 
         return response()->json([

@@ -47,7 +47,7 @@ class VendorStoreController extends Controller
         $products = Product::with('images')
             ->where('vendor_id',$vendor->id)
             ->where('status',1)
-            ->where('is_approved',1)
+            ->where('approval_status','approved')
             ->paginate(10);
 
         return response()->json([

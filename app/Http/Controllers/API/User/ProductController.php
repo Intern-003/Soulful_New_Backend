@@ -32,7 +32,7 @@ class ProductController extends Controller
 
             ->with(['category', 'brand', 'images', 'variants'])
             ->where('status', 1)
-            ->where('is_approved', 1);
+            ->where('approval_status', 'approved');
     }
 
     // =========================
@@ -65,47 +65,93 @@ class ProductController extends Controller
     // =========================
     // GET /products/{slug}
     // =========================
-    public function show($slug)
-    {
-        $product = $this->baseProductQuery()
-            ->with([
-                'reviews' => function ($q) {
-                    $q->where('status', 1)
-                        ->latest()
-                        ->with('user:id,name');
-                },
-                'vendor',
-                'variants.attributeValues.attribute',
-                'specifications'
-            ])
-            ->where('slug', $slug)
-            ->firstOrFail();
+    // public function show($slug)
+    // {
+    //     $product = $this->baseProductQuery()
+    //         ->with([
+    //             'reviews' => function ($q) {
+    //                 $q->where('status', 1)
+    //                     ->latest()
+    //                     ->with('user:id,name');
+    //             },
+    //             'vendor',
+    //             'variants.attributeValues.attribute',
+    //             'specifications'
+    //         ])
+    //         ->where('slug', $slug)
+    //         ->firstOrFail();
 
-        // =========================
-        // VARIANT TRANSFORMATION (KEEP RAW IMAGE)
-        // =========================
-        if ($product->variants) {
-            $product->variants->transform(function ($variant) {
+    //     // =========================
+    //     // VARIANT TRANSFORMATION (KEEP RAW IMAGE)
+    //     // =========================
+    //     if ($product->variants) {
+    //         $product->variants->transform(function ($variant) {
 
-                $grouped = [];
+    //             $grouped = [];
 
-                foreach ($variant->attributeValues as $value) {
-                    $grouped[$value->attribute->name] = $value->value;
-                }
+    //             foreach ($variant->attributeValues as $value) {
+    //                 $grouped[$value->attribute->name] = $value->value;
+    //             }
 
-                $variant->attributes = $grouped;
+    //             $variant->attributes = $grouped;
 
-                unset($variant->attributeValues);
+    //             unset($variant->attributeValues);
 
-                return $variant;
-            });
-        }
+    //             return $variant;
+    //         });
+    //     }
 
-        return response()->json([
-            'success' => true,
-            'data' => $product
-        ]);
+    //     return response()->json([
+    //         'success' => true,
+    //         'data' => $product
+    //     ]);
+    // }
+private function safeProductQuery()
+{
+    return Product::select('products.*')
+        ->with(['category', 'brand', 'images', 'variants']);
+}
+ public function show($identifier)
+{
+    $product = $this->safeProductQuery()
+        ->with([
+            'reviews' => function ($q) {
+                $q->where('status', 1)
+                    ->latest()
+                    ->with('user:id,name');
+            },
+            'vendor',
+            'variants.attributeValues.attribute',
+            'specifications'
+        ])
+        ->where(function ($query) use ($identifier) {
+            $query->where('slug', $identifier)
+                  ->orWhere('id', $identifier);
+        })
+        ->firstOrFail();
+
+    if ($product->variants) {
+        $product->variants->transform(function ($variant) {
+            $grouped = [];
+
+            foreach ($variant->attributeValues as $value) {
+                $grouped[$value->attribute->name] = $value->value;
+            }
+
+            $variant->attributes = $grouped;
+            unset($variant->attributeValues);
+
+            return $variant;
+        });
     }
+
+    return response()->json([
+        'success' => true,
+        'data' => $product
+    ]);
+
+
+}
 
     // =========================
     // SEARCH
