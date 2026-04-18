@@ -267,7 +267,6 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
         Route::post('/tickets', [SupportController::class, 'store'])->middleware('permission:support.create');
         Route::get('/tickets/{id}', [SupportController::class, 'show'])->middleware('permission:support.view');
         Route::post('/tickets/{id}/reply', [SupportController::class, 'reply'])->middleware('permission:support.update');
-        Route::patch('/tickets/{id}/close', [SupportController::class, 'close'])->middleware('permission:support.update');
     });
 
     // ==================== ADMIN ROUTES (All with permission middleware) ====================
@@ -372,17 +371,18 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
         Route::get('/vendors', [AdminVendorController::class, 'index'])->middleware('permission:vendor.view');
         Route::get('/vendors/{id}', [AdminVendorController::class, 'show'])->middleware('permission:vendor.view');
         Route::put('/vendors/{id}/approve', [AdminVendorController::class, 'approve'])->middleware('permission:vendor.approve');
+        Route::put('/vendors/{id}/reject', [AdminVendorController::class, 'reject'])->middleware('permission:vendor.approve');
         Route::put('/vendors/{id}/suspend', [AdminVendorController::class, 'suspend'])->middleware('permission:vendor.update');
         Route::get('/vendors/{id}/documents', [AdminVendorDocumentController::class, 'index'])->middleware('permission:vendor.view');
         Route::put('/documents/{id}/verify', [AdminVendorDocumentController::class, 'verify'])->middleware('permission:vendor.approve');
-
+        Route::put('/documents/{id}/reject', [AdminVendorDocumentController::class, 'reject'])->middleware('permission:vendor.approve');      
         // Admin Order Management
         Route::get('/orders', [AdminOrderController::class, 'index'])->middleware('permission:order.view');
         // Route::get('/orders/{id}', [AdminOrderController::class, 'show'])->middleware('permission:order.view');
         // Route::put('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])->middleware('permission:order.update');
 
          Route::get('/orders/summary', [AdminOrderController::class, 'summary']);
-    Route::get('/orders', [AdminOrderController::class, 'index']);
+    // Route::get('/orders', [AdminOrderController::class, 'index']);
     Route::get('/orders/{id}', [AdminOrderController::class, 'show']);
     Route::put('/orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
     Route::get('/orders/revenue', [AdminOrderController::class, 'revenueByDate']);
@@ -392,15 +392,11 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
         Route::put('/settings', [AdminSettingsController::class, 'update'])->middleware('permission:settings.update');
 
         // Admin Logs
-        Route::get('/logs', [AdminLogController::class, 'index'])->middleware('permission:log.view');
-    });
-});
+        Route::get('/logs', [AdminLogController::class, 'index'])->middleware('permission:log.view');});});
 Route::get('/admin/attributes-with-values', [AdminAttributeController::class, 'indexWithValues']);
 // ==================== HEALTH CHECK (No permission required) ====================
 Route::get('/health', function () {
-    return response()->json(['status' => 'ok', 'timestamp' => now()]);
-});
-
+    return response()->json(['status'=> 'ok', 'timestamp' => now()]);});
 Route::get('/brands/active', [AdminBrandController::class, 'activeBrands']);
 Route::get('/brands/category/{id}', [AdminBrandController::class, 'getBrandsByCategory']);
     Route::get('brands/{brand}', [AdminBrandController::class, 'show']);
