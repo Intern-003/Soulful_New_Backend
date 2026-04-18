@@ -8,107 +8,153 @@ use App\Models\Attribute;
 use App\Models\AttributeValue;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Validation\Rule;
 
 class AdminAttributeValueController extends Controller
 {
 
-    // POST /admin/attributes/{id}/values
+    // =========================
+    // STORE ATTRIBUTE VALUE
+    // =========================
     public function store(Request $request, $id)
     {
-        $request->validate([
-            'value' => 'required|string|max:255'
-        ]);
-
         $attribute = Attribute::findOrFail($id);
 
-        $slug = Str::slug($request->value);
+        $request->validate([
+            'value' => [
+                'required',
+                'string',
+                'max:255',
+                // ✅ prevent duplicate value per attribute
+                Rule::unique('attribute_values', 'value')
+                    ->where(fn ($q) => $q->where('attribute_id', $attribute->id))
+            ],
+            'hex_code' => ['nullable', 'regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/']
+        ]);
 
-        // ensure unique slug
-        $count = AttributeValue::where('slug','LIKE',$slug.'%')->count();
-        if($count > 0){
-            $slug = $slug.'-'.($count+1);
+        // =========================
+        // SLUG GENERATION (ATTRIBUTE-WISE UNIQUE)
+        // =========================
+        $baseSlug = Str::slug($request->value);
+        $slug = $baseSlug;
+        $counter = 1;
+
+        while (
+            AttributeValue::where('attribute_id', $attribute->id)
+                ->where('slug', $slug)
+                ->exists()
+        ) {
+            $slug = $baseSlug . '-' . $counter++;
         }
 
+        // =========================
+        // CREATE VALUE
+        // =========================
         $value = AttributeValue::create([
             'attribute_id' => $attribute->id,
             'value' => $request->value,
-            'slug' => $slug
+            'slug' => $slug,
+            // ✅ normalize HEX
+            'hex_code' => $request->hex_code ? strtoupper($request->hex_code) : null
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Attribute value created successfully',
             'data' => $value
-        ],201);
+        ], 201);
     }
 
-public function deleteAttributeValue($id)
-{
-    $value = AttributeValue::find($id);
+    // =========================
+    // DELETE ATTRIBUTE VALUE
+    // =========================
+    public function deleteAttributeValue($id)
+    {
+        $value = AttributeValue::find($id);
 
-    if (!$value) {
+        if (!$value) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Attribute value not found'
+            ], 404);
+        }
+
+        // prevent delete if used in variants
+        if (
+            DB::table('product_variant_attributes')
+                ->where('attribute_value_id', $id)
+                ->exists()
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Value is used in variants. Cannot delete.'
+            ], 400);
+        }
+
+        $value->delete();
+
         return response()->json([
-            'success' => false,
-            'message' => 'Attribute value not found'
-        ], 404);
+            'success' => true,
+            'message' => 'Attribute value deleted successfully'
+        ]);
     }
 
-    // ✅ Correct table name
-    if (DB::table('product_variant_attributes')
-        ->where('attribute_value_id', $id)
-        ->exists()) {
-        
+    // =========================
+    // UPDATE ATTRIBUTE VALUE
+    // =========================
+    public function updateAttributeValue(Request $request, $id)
+    {
+        $value = AttributeValue::find($id);
+
+        if (!$value) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Attribute value not found'
+            ], 404);
+        }
+
+        $request->validate([
+            'value' => [
+                'required',
+                'string',
+                'max:255',
+                // ✅ prevent duplicate per attribute (ignore current)
+                Rule::unique('attribute_values', 'value')
+                    ->where(fn ($q) => $q->where('attribute_id', $value->attribute_id))
+                    ->ignore($id)
+            ],
+            'hex_code' => ['nullable', 'regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/']
+        ]);
+
+        // =========================
+        // SLUG GENERATION (SAFE UPDATE)
+        // =========================
+        $baseSlug = Str::slug($request->value);
+        $slug = $baseSlug;
+        $counter = 1;
+
+        while (
+            AttributeValue::where('attribute_id', $value->attribute_id)
+                ->where('slug', $slug)
+                ->where('id', '!=', $id)
+                ->exists()
+        ) {
+            $slug = $baseSlug . '-' . $counter++;
+        }
+
+        // =========================
+        // UPDATE VALUE
+        // =========================
+        $value->update([
+            'value' => $request->value,
+            'slug' => $slug,
+            'hex_code' => $request->hex_code ? strtoupper($request->hex_code) : null
+        ]);
+
         return response()->json([
-            'success' => false,
-            'message' => 'Value is used in variants. Cannot delete.'
-        ], 400);
+            'success' => true,
+            'message' => 'Attribute value updated successfully',
+            'data' => $value
+        ]);
     }
-
-    $value->delete();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Attribute value deleted successfully'
-    ]);
-}
-
-public function updateAttributeValue(Request $request, $id)
-{
-    $value = AttributeValue::find($id);
-
-    if (!$value) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Attribute value not found'
-        ], 404);
-    }
-
-    $request->validate([
-        'value' => 'required|string|max:255'
-    ]);
-
-    $slug = Str::slug($request->value);
-
-    // Ensure unique slug
-    $count = AttributeValue::where('slug', 'LIKE', $slug . '%')
-        ->where('id', '!=', $id)
-        ->count();
-
-    if ($count > 0) {
-        $slug = $slug . '-' . ($count + 1);
-    }
-
-    $value->update([
-        'value' => $request->value,
-        'slug' => $slug
-    ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Attribute value updated successfully',
-        'data' => $value
-    ]);
-}
-
 }
