@@ -9,6 +9,18 @@ use Illuminate\Http\Request;
 class ProductController extends Controller
 {
     // =========================
+    // HELPER: SAFE IMAGE URL
+    // =========================
+    private function formatImageUrl($path)
+    {
+        if (!$path) return null;
+
+        return str_starts_with($path, 'http')
+            ? $path
+            : url($path);
+    }
+
+    // =========================
     // BASE PRODUCT QUERY
     // =========================
     private function baseProductQuery()
@@ -26,7 +38,14 @@ class ProductController extends Controller
                 WHERE reviews.product_id = products.id
                 AND reviews.status = 1
             ) as total_reviews')
-            ->with(['category', 'brand', 'images', 'variants'])
+            ->with([
+                'category',
+                'brand',
+                'images',
+                'variants.attributeValues.attribute',
+                'variants.images',
+                'specifications'
+            ])
             ->where('status', 1)
             ->where('approval_status', 'approved');
     }
@@ -37,7 +56,14 @@ class ProductController extends Controller
     private function safeProductQuery()
     {
         return Product::select('products.*')
-            ->with(['category', 'brand', 'images', 'variants'])
+            ->with([
+                'category',
+                'brand',
+                'images',
+                'variants.attributeValues.attribute',
+                'variants.images',
+                'specifications'
+            ])
             ->where('status', 1)
             ->where('approval_status', 'approved');
     }
@@ -80,9 +106,7 @@ class ProductController extends Controller
                         ->with('user:id,name');
                 },
                 'vendor',
-                'variants.attributeValues.attribute',
-                'variants.images',
-                'specifications'
+                'user'
             ])
             ->where(function ($query) use ($identifier) {
                 $query->where('slug', $identifier)
@@ -91,55 +115,76 @@ class ProductController extends Controller
             ->firstOrFail();
 
         // =========================
-        // PRODUCT RATINGS
+        // RATINGS
         // =========================
         $product->average_rating = $product->reviews->avg('rating');
         $product->total_reviews = $product->reviews->count();
 
+        // =========================
+        // EXTRA PRODUCT FIELDS
+        // =========================
+        $product->is_featured = (bool) $product->is_featured;
+
+        // =========================
+        // CREATOR (vendor/user)
+        // =========================
+        if ($product->vendor_id && $product->vendor) {
+            $product->creator = [
+                'type' => 'vendor',
+                'id' => $product->vendor->id,
+                'name' => $product->vendor->store_name,
+                'email' => $product->vendor->user->email ?? null
+            ];
+        } else {
+            $product->creator = [
+                'type' => 'user',
+                'id' => $product->user->id ?? null,
+                'name' => $product->user->name ?? null,
+                'email' => $product->user->email ?? null
+            ];
+        }
+
+        // =========================
+        // VARIANTS TRANSFORM
+        // =========================
         $product->variants->transform(function ($variant) {
 
-            // =========================
-            // ATTRIBUTES (CLEAN FORMAT)
-            // =========================
+            // ATTRIBUTES CLEAN FORMAT
             $attributes = [];
 
             foreach ($variant->attributeValues as $value) {
-
                 $name = $value->attribute->name;
 
                 $attributes[$name] = array_filter([
                     'value' => $value->value,
                     'hex' => $value->hex_code ?: null
                 ]);
-
-                // remove null keys automatically
-                if (!isset($attributes[$name]['hex'])) {
-                    unset($attributes[$name]['hex']);
-                }
             }
 
             $variant->attributes = $attributes;
 
+            // ATTRIBUTE IDS (important)
+            $variant->attribute_value_ids = $variant->attributeValues->pluck('id')->toArray();
+
             unset($variant->attributeValues);
 
-            // =========================
-            // IMAGES (CLEAN)
-            // =========================
+            // EXTRA FIELDS
+            $variant->discount_price = $variant->discount_price;
+            $variant->barcode = $variant->barcode;
+            $variant->weight = $variant->weight;
+
+            // IMAGES
             $variant->images->transform(function ($img) {
-                $img->image_url = url($img->image);
+                $img->image_url = $this->formatImageUrl($img->image_url);
                 return $img;
             });
 
-            // =========================
-            // PRIMARY IMAGE (SAFE)
-            // =========================
+            // PRIMARY IMAGE
             $variant->primary_image = optional(
                 $variant->images->firstWhere('is_primary', 1)
             )->image_url ?? optional($variant->images->first())->image_url;
 
             return $variant;
-
-
         });
 
         // =========================
@@ -147,7 +192,7 @@ class ProductController extends Controller
         // =========================
         if ($product->images) {
             $product->images->transform(function ($img) {
-                $img->image_url = url($img->image);
+                $img->image_url = $this->formatImageUrl($img->image_url);
                 return $img;
             });
         }
@@ -253,7 +298,7 @@ class ProductController extends Controller
             ->get();
 
         $images->transform(function ($img) {
-            $img->image_url = url($img->image);
+            $img->image_url = $this->formatImageUrl($img->image_url);
             return $img;
         });
 
