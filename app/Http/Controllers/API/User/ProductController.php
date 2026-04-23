@@ -9,19 +9,7 @@ use Illuminate\Http\Request;
 class ProductController extends Controller
 {
     // =========================
-    // HELPER: SAFE IMAGE URL
-    // =========================
-    private function formatImageUrl($path)
-    {
-        if (!$path) return null;
-
-        return str_starts_with($path, 'http')
-            ? $path
-            : url($path);
-    }
-
-    // =========================
-    // BASE PRODUCT QUERY
+    // BASE QUERY (RAW DB ONLY)
     // =========================
     private function baseProductQuery()
     {
@@ -51,7 +39,7 @@ class ProductController extends Controller
     }
 
     // =========================
-    // SAFE PRODUCT QUERY
+    // SAFE QUERY (RAW)
     // =========================
     private function safeProductQuery()
     {
@@ -94,108 +82,25 @@ class ProductController extends Controller
     }
 
     // =========================
-    // SHOW PRODUCT
+    // SHOW PRODUCT (RAW DB OUTPUT)
     // =========================
     public function show($identifier)
     {
         $product = $this->safeProductQuery()
             ->with([
-                'reviews' => function ($q) {
-                    $q->where('status', 1)
-                        ->latest()
-                        ->with('user:id,name');
-                },
+                'reviews.user',
                 'vendor',
                 'user'
             ])
-            ->where(function ($query) use ($identifier) {
-                $query->where('slug', $identifier)
-                    ->orWhere('id', $identifier);
+            ->where(function ($q) use ($identifier) {
+                $q->where('slug', $identifier)
+                  ->orWhere('id', $identifier);
             })
             ->firstOrFail();
 
-        // =========================
-        // RATINGS
-        // =========================
+        // ONLY COMPUTED FIELDS (optional but minimal)
         $product->average_rating = $product->reviews->avg('rating');
         $product->total_reviews = $product->reviews->count();
-
-        // =========================
-        // EXTRA PRODUCT FIELDS
-        // =========================
-        $product->is_featured = (bool) $product->is_featured;
-
-        // =========================
-        // CREATOR (vendor/user)
-        // =========================
-        if ($product->vendor_id && $product->vendor) {
-            $product->creator = [
-                'type' => 'vendor',
-                'id' => $product->vendor->id,
-                'name' => $product->vendor->store_name,
-                'email' => $product->vendor->user->email ?? null
-            ];
-        } else {
-            $product->creator = [
-                'type' => 'user',
-                'id' => $product->user->id ?? null,
-                'name' => $product->user->name ?? null,
-                'email' => $product->user->email ?? null
-            ];
-        }
-
-        // =========================
-        // VARIANTS TRANSFORM
-        // =========================
-        $product->variants->transform(function ($variant) {
-
-            // ATTRIBUTES CLEAN FORMAT
-            $attributes = [];
-
-            foreach ($variant->attributeValues as $value) {
-                $name = $value->attribute->name;
-
-                $attributes[$name] = array_filter([
-                    'value' => $value->value,
-                    'hex' => $value->hex_code ?: null
-                ]);
-            }
-
-            $variant->attributes = $attributes;
-
-            // ATTRIBUTE IDS (important)
-            $variant->attribute_value_ids = $variant->attributeValues->pluck('id')->toArray();
-
-            unset($variant->attributeValues);
-
-            // EXTRA FIELDS
-            $variant->discount_price = $variant->discount_price;
-            $variant->barcode = $variant->barcode;
-            $variant->weight = $variant->weight;
-
-            // IMAGES
-            $variant->images->transform(function ($img) {
-                $img->image_url = $this->formatImageUrl($img->image_url);
-                return $img;
-            });
-
-            // PRIMARY IMAGE
-            $variant->primary_image = optional(
-                $variant->images->firstWhere('is_primary', 1)
-            )->image_url ?? optional($variant->images->first())->image_url;
-
-            return $variant;
-        });
-
-        // =========================
-        // PRODUCT IMAGES
-        // =========================
-        if ($product->images) {
-            $product->images->transform(function ($img) {
-                $img->image_url = $this->formatImageUrl($img->image_url);
-                return $img;
-            });
-        }
 
         return response()->json([
             'success' => true,
@@ -289,27 +194,20 @@ class ProductController extends Controller
     }
 
     // =========================
-    // IMAGES
+    // IMAGES (RAW)
     // =========================
     public function images($id)
     {
-        $images = \App\Models\ProductImage::where('product_id', $id)
-            ->orderBy('sort_order')
-            ->get();
-
-        $images->transform(function ($img) {
-            $img->image_url = $this->formatImageUrl($img->image_url);
-            return $img;
-        });
-
         return response()->json([
             'success' => true,
-            'data' => $images
+            'data' => \App\Models\ProductImage::where('product_id', $id)
+                ->orderBy('sort_order')
+                ->get()
         ]);
     }
 
     // =========================
-    // REVIEWS
+    // REVIEWS (RAW)
     // =========================
     public function reviews($id)
     {
@@ -318,6 +216,7 @@ class ProductController extends Controller
             'data' => \App\Models\Review::where('product_id', $id)
                 ->where('status', 1)
                 ->latest()
+                ->with('user')
                 ->get()
         ]);
     }
