@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 class ProductController extends Controller
 {
     // =========================
-    // BASE QUERY (RAW DB ONLY)
+    // BASE QUERY
     // =========================
     private function baseProductQuery()
     {
@@ -39,7 +39,7 @@ class ProductController extends Controller
     }
 
     // =========================
-    // SAFE QUERY (RAW)
+    // SAFE QUERY
     // =========================
     private function safeProductQuery()
     {
@@ -82,7 +82,7 @@ class ProductController extends Controller
     }
 
     // =========================
-    // SHOW PRODUCT (RAW DB OUTPUT)
+    // SHOW PRODUCT
     // =========================
     public function show($identifier)
     {
@@ -94,13 +94,104 @@ class ProductController extends Controller
             ])
             ->where(function ($q) use ($identifier) {
                 $q->where('slug', $identifier)
-                  ->orWhere('id', $identifier);
+                    ->orWhere('id', $identifier);
             })
             ->firstOrFail();
 
-        // ONLY COMPUTED FIELDS (optional but minimal)
+        // =========================
+        // RATINGS
+        // =========================
         $product->average_rating = $product->reviews->avg('rating');
         $product->total_reviews = $product->reviews->count();
+
+        // =========================
+        // CREATOR
+        // =========================
+        if ($product->vendor_id && $product->vendor) {
+            $product->creator = [
+                'type' => 'vendor',
+                'id' => $product->vendor->id,
+                'name' => $product->vendor->store_name,
+                'email' => $product->vendor->user->email ?? null
+            ];
+        } else {
+            $product->creator = [
+                'type' => 'user',
+                'id' => $product->user->id ?? null,
+                'name' => $product->user->name ?? null,
+                'email' => $product->user->email ?? null
+            ];
+        }
+
+        // =========================
+        // VARIANTS
+        // =========================
+        $product->variants->transform(function ($variant) {
+
+            // =========================
+            // ATTRIBUTES (CLEAN UI FORMAT)
+            // =========================
+            $attributes = [];
+
+            foreach ($variant->attributeValues as $value) {
+                $name = $value->attribute->name ?? 'Attribute';
+
+                $attributes[$name] = array_filter([
+                    'value' => $value->value,
+                    'hex' => $value->hex_code ?: null
+                ]);
+            }
+
+            unset($variant->attributeValues);
+
+            $variant->attributes = $attributes;
+
+            // =========================
+            // CORE CLEANUP ONLY
+            // =========================
+            $variant->discount_price = $variant->discount_price;
+            $variant->barcode = $variant->barcode;
+            $variant->weight = $variant->weight;
+
+            // =========================
+            // IMAGES (RAW DB FORMAT)
+            // =========================
+            $variant->images->transform(function ($img) {
+                return [
+                    'id' => $img->id,
+                    'product_id' => $img->product_id,
+                    'variant_id' => $img->variant_id,
+                    'image_url' => $img->image_url, // raw DB path only
+                    'is_primary' => $img->is_primary,
+                    'sort_order' => $img->sort_order,
+                ];
+            });
+
+            // =========================
+            // PRIMARY IMAGE (RAW)
+            // =========================
+            $variant->primary_image = optional(
+                $variant->images->firstWhere('is_primary', 1)
+            )['image_url'] ?? optional($variant->images->first())['image_url'];
+
+            return $variant;
+        });
+
+        // =========================
+        // PRODUCT IMAGES (ONLY PATH)
+        // =========================
+        if ($product->images) {
+            $product->images->transform(function ($img) {
+                return [
+                    'id' => $img->id,
+                    'product_id' => $img->product_id,
+                    'variant_id' => $img->variant_id,
+                    'image_url' => $img->image_url, // ✅ RAW PATH ONLY
+                    'is_primary' => $img->is_primary,
+                    'sort_order' => $img->sort_order,
+                ];
+            });
+        }
 
         return response()->json([
             'success' => true,
@@ -194,7 +285,7 @@ class ProductController extends Controller
     }
 
     // =========================
-    // IMAGES (RAW)
+    // IMAGES (RAW PATH ONLY)
     // =========================
     public function images($id)
     {
@@ -203,11 +294,21 @@ class ProductController extends Controller
             'data' => \App\Models\ProductImage::where('product_id', $id)
                 ->orderBy('sort_order')
                 ->get()
+                ->map(function ($img) {
+                    return [
+                        'id' => $img->id,
+                        'product_id' => $img->product_id,
+                        'variant_id' => $img->variant_id,
+                        'image_url' => $img->image_url, // ✅ RAW PATH ONLY
+                        'is_primary' => $img->is_primary,
+                        'sort_order' => $img->sort_order,
+                    ];
+                })
         ]);
     }
 
     // =========================
-    // REVIEWS (RAW)
+    // REVIEWS
     // =========================
     public function reviews($id)
     {
