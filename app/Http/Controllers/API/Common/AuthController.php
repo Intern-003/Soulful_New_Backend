@@ -10,44 +10,100 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use App\Http\Controllers\API\Common\OtpController;
 
 class AuthController extends Controller
 {
-    /*
-    |--------------------------------------------------------------------------
-    | Register
-    |--------------------------------------------------------------------------
-    */
-    public function register(Request $request)
-    {
-        $request->validate([
-            'name'                  => 'required|string|max:255',
-            'email'                 => 'required|email|unique:users,email',
-            'password'              => 'required|string|min:6|confirmed',
-            'phone'                 => 'nullable|string|max:20',
-        ]);
 
-        $user = User::create([
-            'name'      => $request->name,
-            'email'     => $request->email,
-            'password'  => Hash::make($request->password),
-            'phone'     => $request->phone,
-            'role_id'   => 2,
-            'status'    => 1,
-        ]);
+public function register(Request $request)
+{
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'nullable|email|unique:users,email',
+        'phone' => 'nullable|string|unique:users,phone',
+        'password' => 'required|string|min:6|confirmed',
+        'type' => 'required|in:email,phone'
+    ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+    $identifier = $request->type === 'email'
+        ? $request->email
+        : $request->phone;
 
-        return response()->json([
-            'success'       => true,
-            'message'       => 'Registration successful.',
-            'user'          => $this->formatUser($user),
-            'role'          => $user->role->name ?? null,
-            'permissions'   => [],
-            'access_token'  => $token,
-            'token_type'    => 'Bearer',
-        ], 201);
+    // call OTP controller
+    app(OtpController::class)->sendOtp(new Request([
+        'identifier' => $identifier,
+        'type' => $request->type
+    ]));
+
+    return response()->json([
+        'message' => 'OTP sent. Please verify to complete registration'
+    ]);
+}
+
+public function verifyRegister(Request $request)
+{
+    $request->validate([
+        'identifier' => 'required',
+        'type' => 'required|in:email,phone',
+        'otp' => 'required',
+        'name' => 'required|string',
+        'password' => 'required|string|min:6',
+    ]);
+
+    $otpController = app(OtpController::class);
+
+    $result = $otpController->verifyOtpInternal(
+        $request->identifier,
+        $request->type,
+        $request->otp
+    );
+
+    if (!$result['status']) {
+        return response()->json(['message' => $result['message']], 400);
     }
+
+    // ✅ CREATE USER AFTER OTP SUCCESS
+    $user = User::create([
+        'name' => $request->name,
+        'email' => $request->type === 'email' ? $request->identifier : null,
+        'phone' => $request->type === 'phone' ? $request->identifier : null,
+        'password' => Hash::make($request->password),
+        'role_id' => 2,
+        'status' => 1
+    ]);
+
+    return response()->json([
+        'message' => 'Registration successful'
+    ]);
+}
+    // ----------------------------
+    // Register
+    // ----------------------------
+    // public function register(Request $request)
+    // {
+    //     $request->validate([
+    //         'name' => 'required|string|max:255',
+    //         'email' => 'required|email|unique:users,email',
+    //         'password' => 'required|string|min:6|confirmed',
+    //         'phone' => 'nullable|string',
+    //     ]);
+
+    //     $user = User::create([
+    //         'name' => $request->name,
+    //         'email' => $request->email,
+    //         'password' => Hash::make($request->password),
+    //         'phone' => $request->phone,
+    //         'role_id' => 2 // 🔥 no role from user side
+    //     ]);
+
+    //     $token = $user->createToken('auth_token')->plainTextToken;
+
+    //     return response()->json([
+    //         'user' => $user,
+    //         'access_token' => $token,
+    //         'token_type' => 'Bearer',
+    //     ], 201);
+    // }
 
     /*
     |--------------------------------------------------------------------------

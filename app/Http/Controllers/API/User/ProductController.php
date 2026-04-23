@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 class ProductController extends Controller
 {
     // =========================
-    // BASE PRODUCT QUERY
+    // BASE QUERY
     // =========================
     private function baseProductQuery()
     {
@@ -26,18 +26,32 @@ class ProductController extends Controller
                 WHERE reviews.product_id = products.id
                 AND reviews.status = 1
             ) as total_reviews')
-            ->with(['category', 'brand', 'images', 'variants'])
+            ->with([
+                'category',
+                'brand',
+                'images',
+                'variants.attributeValues.attribute',
+                'variants.images',
+                'specifications'
+            ])
             ->where('status', 1)
             ->where('approval_status', 'approved');
     }
 
     // =========================
-    // SAFE PRODUCT QUERY
+    // SAFE QUERY
     // =========================
     private function safeProductQuery()
     {
         return Product::select('products.*')
-            ->with(['category', 'brand', 'images', 'variants'])
+            ->with([
+                'category',
+                'brand',
+                'images',
+                'variants.attributeValues.attribute',
+                'variants.images',
+                'specifications'
+            ])
             ->where('status', 1)
             ->where('approval_status', 'approved');
     }
@@ -74,69 +88,108 @@ class ProductController extends Controller
     {
         $product = $this->safeProductQuery()
             ->with([
-                'reviews' => function ($q) {
-                    $q->where('status', 1)
-                        ->latest()
-                        ->with('user:id,name');
-                },
+                'reviews.user',
                 'vendor',
-                'variants.attributeValues.attribute',
-                'variants.images',
-                'specifications'
+                'user'
             ])
-            ->where(function ($query) use ($identifier) {
-                $query->where('slug', $identifier)
+            ->where(function ($q) use ($identifier) {
+                $q->where('slug', $identifier)
                     ->orWhere('id', $identifier);
             })
             ->firstOrFail();
 
         // =========================
-        // PRODUCT RATINGS
+        // RATINGS
         // =========================
         $product->average_rating = $product->reviews->avg('rating');
         $product->total_reviews = $product->reviews->count();
 
         // =========================
-        // FORMAT VARIANTS
+        // CREATOR
+        // =========================
+        if ($product->vendor_id && $product->vendor) {
+            $product->creator = [
+                'type' => 'vendor',
+                'id' => $product->vendor->id,
+                'name' => $product->vendor->store_name,
+                'email' => $product->vendor->user->email ?? null
+            ];
+        } else {
+            $product->creator = [
+                'type' => 'user',
+                'id' => $product->user->id ?? null,
+                'name' => $product->user->name ?? null,
+                'email' => $product->user->email ?? null
+            ];
+        }
+
+        // =========================
+        // VARIANTS
         // =========================
         $product->variants->transform(function ($variant) {
 
-            // -------- ATTRIBUTES --------
-            $grouped = [];
+            // =========================
+            // ATTRIBUTES (CLEAN UI FORMAT)
+            // =========================
+            $attributes = [];
 
             foreach ($variant->attributeValues as $value) {
-                $grouped[$value->attribute->name][] = [
+                $name = $value->attribute->name ?? 'Attribute';
+
+                $attributes[$name] = array_filter([
                     'value' => $value->value,
-                    'hex'   => $value->hex_code
-                ];
+                    'hex' => $value->hex_code ?: null
+                ]);
             }
 
-            $variant->attributes = $grouped;
             unset($variant->attributeValues);
 
-            // -------- IMAGES --------
+            $variant->attributes = $attributes;
+
+            // =========================
+            // CORE CLEANUP ONLY
+            // =========================
+            $variant->discount_price = $variant->discount_price;
+            $variant->barcode = $variant->barcode;
+            $variant->weight = $variant->weight;
+
+            // =========================
+            // IMAGES (RAW DB FORMAT)
+            // =========================
             $variant->images->transform(function ($img) {
-                $img->image_url = url($img->image);
-                return $img;
+                return [
+                    'id' => $img->id,
+                    'product_id' => $img->product_id,
+                    'variant_id' => $img->variant_id,
+                    'image_url' => $img->image_url, // raw DB path only
+                    'is_primary' => $img->is_primary,
+                    'sort_order' => $img->sort_order,
+                ];
             });
 
-            // -------- PRIMARY IMAGE --------
-            $primary = $variant->images->firstWhere('is_primary', 1);
-
-            $variant->primary_image = $primary
-                ? $primary->image_url
-                : ($variant->images->first()->image_url ?? null);
+            // =========================
+            // PRIMARY IMAGE (RAW)
+            // =========================
+            $variant->primary_image = optional(
+                $variant->images->firstWhere('is_primary', 1)
+            )['image_url'] ?? optional($variant->images->first())['image_url'];
 
             return $variant;
         });
 
         // =========================
-        // PRODUCT IMAGES
+        // PRODUCT IMAGES (ONLY PATH)
         // =========================
         if ($product->images) {
             $product->images->transform(function ($img) {
-                $img->image_url = url($img->image);
-                return $img;
+                return [
+                    'id' => $img->id,
+                    'product_id' => $img->product_id,
+                    'variant_id' => $img->variant_id,
+                    'image_url' => $img->image_url, // ✅ RAW PATH ONLY
+                    'is_primary' => $img->is_primary,
+                    'sort_order' => $img->sort_order,
+                ];
             });
         }
 
@@ -232,22 +285,25 @@ class ProductController extends Controller
     }
 
     // =========================
-    // IMAGES
+    // IMAGES (RAW PATH ONLY)
     // =========================
     public function images($id)
     {
-        $images = \App\Models\ProductImage::where('product_id', $id)
-            ->orderBy('sort_order')
-            ->get();
-
-        $images->transform(function ($img) {
-            $img->image_url = url($img->image);
-            return $img;
-        });
-
         return response()->json([
             'success' => true,
-            'data' => $images
+            'data' => \App\Models\ProductImage::where('product_id', $id)
+                ->orderBy('sort_order')
+                ->get()
+                ->map(function ($img) {
+                    return [
+                        'id' => $img->id,
+                        'product_id' => $img->product_id,
+                        'variant_id' => $img->variant_id,
+                        'image_url' => $img->image_url, // ✅ RAW PATH ONLY
+                        'is_primary' => $img->is_primary,
+                        'sort_order' => $img->sort_order,
+                    ];
+                })
         ]);
     }
 
@@ -261,6 +317,7 @@ class ProductController extends Controller
             'data' => \App\Models\Review::where('product_id', $id)
                 ->where('status', 1)
                 ->latest()
+                ->with('user')
                 ->get()
         ]);
     }

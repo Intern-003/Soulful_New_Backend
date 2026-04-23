@@ -108,11 +108,13 @@ class VendorProductController extends Controller
         $product = Product::with([
             'category',
             'vendor',
-            'brand',  // ✅ Added brand relationship
+            'brand',
             'images',
             'variants.attributeValues.attribute',
+            'variants.images',  // ✅ ADD THIS - loads variant images
             'specifications'
         ])->findOrFail($id);
+
 
         if ($product->vendor_id) {
             $creator = [
@@ -147,7 +149,7 @@ class VendorProductController extends Controller
                 'length' => $product->length,  // ✅ ADDED
                 'width' => $product->width,    // ✅ ADDED
                 'height' => $product->height,  // ✅ ADDED
-                'is_featured' => (bool)$product->is_featured,  // ✅ ADDED
+                'is_featured' => (bool) $product->is_featured,  // ✅ ADDED
                 'status' => $product->status,
                 'approval_status' => $product->approval_status,
                 'brand_id' => $product->brand_id,  // ✅ ADDED
@@ -177,14 +179,24 @@ class VendorProductController extends Controller
                         'position' => $image->position ?? null
                     ];
                 }),
-
                 'variants' => $product->variants->map(function ($variant) {
                     return [
                         'id' => $variant->id,
                         'sku' => $variant->sku,
                         'price' => $variant->price,
                         'stock' => $variant->stock,
+                        'weight' => $variant->weight,  // ✅ ADDED
+                        'barcode' => $variant->barcode,  // ✅ ADDED
+                        'discount_price' => $variant->discount_price,  // ✅ ADDED
                         'image' => $variant->image,
+                        'images' => $variant->images->map(function ($image) {  // ✅ ADDED - variant images
+                            return [
+                                'id' => $image->id,
+                                'image_url' => $image->image_url,
+                                'is_primary' => $image->is_primary,
+                            ];
+                        }),
+                        'attribute_value_ids' => $variant->attributeValues->pluck('id')->toArray(),  // ✅ ADDED
                         'attributes' => $variant->attributeValues->map(function ($val) {
                             return [
                                 'attribute_id' => $val->attribute_id,
