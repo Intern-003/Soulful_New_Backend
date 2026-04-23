@@ -49,6 +49,7 @@ use App\Http\Controllers\API\Admin\AdminUserController;
 use App\Http\Controllers\API\Admin\AdminLogController;
 use App\Http\Controllers\API\Admin\AdminBrandController;
 use App\Http\Controllers\API\Admin\AdminProductController;
+use App\Http\Controllers\API\Common\OtpController;
 
 /*
 |--------------------------------------------------------------------------
@@ -86,6 +87,9 @@ Route::post('auth/login', [AuthController::class, 'login']);
 Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/auth/google', [AuthController::class, 'googleLogin']);
+Route::post('/send-otp', [OtpController::class, 'sendOtp']);
+//Route::post('auth/register', [AuthController::class, 'register']);
+Route::post('auth/verify-register', [AuthController::class, 'verifyRegister']);
 
 // ==================== PUBLIC VIEW ROUTES (With view permissions) ====================
 Route::get('profile/{id}', [ProfileController::class, 'getProfileById'])->middleware('permission:profile.view');

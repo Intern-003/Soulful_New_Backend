@@ -96,38 +96,50 @@ class ProductController extends Controller
         $product->average_rating = $product->reviews->avg('rating');
         $product->total_reviews = $product->reviews->count();
 
-        // =========================
-        // FORMAT VARIANTS
-        // =========================
         $product->variants->transform(function ($variant) {
 
-            // -------- ATTRIBUTES --------
-            $grouped = [];
+            // =========================
+            // ATTRIBUTES (CLEAN FORMAT)
+            // =========================
+            $attributes = [];
 
             foreach ($variant->attributeValues as $value) {
-                $grouped[$value->attribute->name][] = [
+
+                $name = $value->attribute->name;
+
+                $attributes[$name] = array_filter([
                     'value' => $value->value,
-                    'hex'   => $value->hex_code
-                ];
+                    'hex' => $value->hex_code ?: null
+                ]);
+
+                // remove null keys automatically
+                if (!isset($attributes[$name]['hex'])) {
+                    unset($attributes[$name]['hex']);
+                }
             }
 
-            $variant->attributes = $grouped;
+            $variant->attributes = $attributes;
+
             unset($variant->attributeValues);
 
-            // -------- IMAGES --------
+            // =========================
+            // IMAGES (CLEAN)
+            // =========================
             $variant->images->transform(function ($img) {
                 $img->image_url = url($img->image);
                 return $img;
             });
 
-            // -------- PRIMARY IMAGE --------
-            $primary = $variant->images->firstWhere('is_primary', 1);
-
-            $variant->primary_image = $primary
-                ? $primary->image_url
-                : ($variant->images->first()->image_url ?? null);
+            // =========================
+            // PRIMARY IMAGE (SAFE)
+            // =========================
+            $variant->primary_image = optional(
+                $variant->images->firstWhere('is_primary', 1)
+            )->image_url ?? optional($variant->images->first())->image_url;
 
             return $variant;
+
+
         });
 
         // =========================

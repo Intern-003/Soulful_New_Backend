@@ -8,7 +8,7 @@ class AttributeValue extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['attribute_id', 'value', 'slug'];
+    protected $fillable = ['attribute_id', 'value','hex_code' ,'slug'];
 
     public function attribute()
     {
