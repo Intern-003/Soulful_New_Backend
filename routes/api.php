@@ -144,7 +144,6 @@ Route::get('/coupon/available', [CouponController::class, 'availableCoupons'])->
 Route::post('/coupon/validate', [CouponController::class, 'validateCoupon'])->middleware('permission:coupon.view');
 
 // ==================== VENDOR REGISTRATION (Public) ====================
-Route::post('/vendor/register', [VendorRegisterController::class, 'register']);
 
 // ==================== ADMIN BANNERS PUBLIC VIEW ====================
 Route::get('admin/banners', [AdminBannerController::class, 'getBanners']);
@@ -221,7 +220,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/dashboard/stats', [VendorDashboardController::class, 'stats'])->middleware('permission:vendor.dashboard.view');
         //Route::get('/orders/summary', [VendorDashboardController::class, 'ordersSummary'])->middleware('permission:vendor.dashboard.view');
         Route::get('/documents', [VendorDocumentController::class, 'index'])->middleware('permission:vendor.documents.view');
-        Route::post('/documents', [VendorDocumentController::class, 'store'])->middleware('permission:vendor.documents.create');
+        Route::post('/documents', [VendorDocumentController::class, 'store']);
         Route::get('/inventory/{vendor_id}', [VendorInventoryController::class, 'inventory'])->middleware('permission:vendor.inventory.view');
         Route::get('/products/low-stock/{vendor_id}', [VendorInventoryController::class, 'lowStock'])->middleware('permission:vendor.inventory.view');
     });
@@ -403,3 +402,5 @@ Route::get('/health', function () {
 Route::get('/brands/active', [AdminBrandController::class, 'activeBrands']);
 Route::get('/brands/category/{id}', [AdminBrandController::class, 'getBrandsByCategory']);
     Route::get('brands/{brand}', [AdminBrandController::class, 'show']);
+Route::middleware('auth:sanctum')->post('/vendor/register', [VendorRegisterController::class, 'register']);
+Route::middleware('auth:sanctum')->post('/vendor/submit',[VendorRegisterController::class, 'submit']);

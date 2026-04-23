@@ -5,56 +5,65 @@ namespace App\Http\Controllers\API\Common;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
-
 class AuthController extends Controller
 {
-    // ----------------------------
-    // Register
-    // ----------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Register
+    |--------------------------------------------------------------------------
+    */
     public function register(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6|confirmed',
-            'phone' => 'nullable|string',
+            'name'                  => 'required|string|max:255',
+            'email'                 => 'required|email|unique:users,email',
+            'password'              => 'required|string|min:6|confirmed',
+            'phone'                 => 'nullable|string|max:20',
         ]);
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'phone' => $request->phone,
-            'role_id' => 2 // 🔥 no role from user side
+            'name'      => $request->name,
+            'email'     => $request->email,
+            'password'  => Hash::make($request->password),
+            'phone'     => $request->phone,
+            'role_id'   => 2,
+            'status'    => 1,
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
-            'access_token' => $token,
-            'token_type' => 'Bearer',
+            'success'       => true,
+            'message'       => 'Registration successful.',
+            'user'          => $this->formatUser($user),
+            'role'          => $user->role->name ?? null,
+            'permissions'   => [],
+            'access_token'  => $token,
+            'token_type'    => 'Bearer',
         ], 201);
     }
 
-    // ----------------------------
-    // Login
-    // ----------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Login
+    |--------------------------------------------------------------------------
+    */
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
+            'email'     => 'required|email',
+            'password'  => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::with('role.permissions')
+            ->where('email', $request->email)
+            ->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
@@ -63,229 +72,298 @@ class AuthController extends Controller
         }
 
         if (!$user->status) {
-            return response()->json(['message' => 'Account disabled'], 403);
+            return response()->json([
+                'success' => false,
+                'message' => 'Account disabled.',
+            ], 403);
         }
 
-        // ✅ remove old tokens (BEST PRACTICE)
-        $user->tokens()->delete();
+        /*
+        IMPORTANT FIX:
+        Removed ->tokens()->delete()
+        It was invalidating tokens in other tabs/sessions
+        causing Unauthenticated issue.
+        */
 
         $user->last_login_at = now();
         $user->save();
 
         $token = $user->createToken('auth_token')->plainTextToken;
-        // Load role + permissions
-        $user->load('role.permissions');
-
-        // Transform permissions
-        $permissions = $user->role
-            ? $user->role->permissions->map(function ($permission) {
-                return [
-                    'module' => $permission->module,
-                    'action' => $permission->action,
-                ];
-            })
-            : collect();
 
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-            ],
-            'role' => $user->role->name ?? null,
-            'permissions' => $permissions,
-            'access_token' => $token,
-            'token_type' => 'Bearer'
+            'success'       => true,
+            'message'       => 'Login successful.',
+            'user'          => $this->formatUser($user),
+            'role'          => $user->role->name ?? null,
+            'permissions'   => $this->formatPermissions($user),
+            'access_token'  => $token,
+            'token_type'    => 'Bearer',
         ]);
-
     }
 
-    // ----------------------------
-    // Logout
-    // ----------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Logout
+    |--------------------------------------------------------------------------
+    */
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
-        return response()->json(['message' => 'Logged out']);
+        if ($request->user()?->currentAccessToken()) {
+            $request->user()->currentAccessToken()->delete();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Logged out successfully.',
+        ]);
     }
 
-    // ----------------------------
-    // Refresh Token
-    // ----------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Token
+    |--------------------------------------------------------------------------
+    */
     public function refreshToken(Request $request)
     {
         $user = $request->user();
 
-        // $currentToken = $request->user()->currentAccessToken();
-        // if ($currentToken()->created_at->lt(now()->subDays(7))) {
-        //     return response()->json(['message' => 'Token expired'], 401);
-        // }
-
-        $currentToken = $request->user()->currentAccessToken();
-
-        if ($currentToken->created_at->lt(now()->subDays(7))) {
-            return response()->json(['message' => 'Token expired'], 401);
+        if (!$user || !$user->currentAccessToken()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated.',
+            ], 401);
         }
 
-        // delete ONLY current token
-        $currentToken()->delete();
+        $currentToken = $user->currentAccessToken();
 
-        // create new token
+        if ($currentToken->created_at->lt(now()->subDays(7))) {
+            $currentToken->delete();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Token expired.',
+            ], 401);
+        }
+
+        $currentToken->delete();
+
         $newToken = $user->createToken('auth_token')->plainTextToken;
 
-
         return response()->json([
-            'access_token' => $newToken,
-            'token_type' => 'Bearer'
+            'success'       => true,
+            'message'       => 'Token refreshed.',
+            'access_token'  => $newToken,
+            'token_type'    => 'Bearer',
         ]);
     }
-    // ----------------------------
-    // Me
-    // ----------------------------
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current User
+    |--------------------------------------------------------------------------
+    */
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user()->load('role.permissions');
+
+        return response()->json([
+            'success'       => true,
+            'user'          => $this->formatUser($user),
+            'role'          => $user->role->name ?? null,
+            'permissions'   => $this->formatPermissions($user),
+        ]);
     }
 
-    // ----------------------------
-    // Forgot Password (TEST MODE)
-    // ----------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Forgot Password
+    |--------------------------------------------------------------------------
+    */
     public function forgotPassword(Request $request)
     {
-        $request->validate(['email' => 'required|email']);
+        $request->validate([
+            'email' => 'required|email',
+        ]);
 
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found.',
+            ], 404);
         }
 
         $token = app('auth.password.broker')->createToken($user);
 
         return response()->json([
-            'message' => 'Reset token generated',
-            'token' => $token
+            'success' => true,
+            'message' => 'Reset token generated.',
+            'token'   => $token,
         ]);
     }
 
-    // ----------------------------
-    // Reset Password
-    // ----------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Reset Password
+    |--------------------------------------------------------------------------
+    */
     public function resetPassword(Request $request)
     {
         $request->validate([
-            'token' => 'required',
-            'email' => 'required|email',
-            'password' => 'required|confirmed|min:6',
+            'token'                  => 'required',
+            'email'                  => 'required|email',
+            'password'               => 'required|min:6|confirmed',
         ]);
 
         $status = Password::reset(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
+            $request->only(
+                'email',
+                'password',
+                'password_confirmation',
+                'token'
+            ),
             function ($user, $password) {
                 $user->password = Hash::make($password);
                 $user->save();
+
+                // logout all devices after reset
+                $user->tokens()->delete();
             }
         );
 
-        return $status === Password::PASSWORD_RESET
-            ? response()->json(['message' => 'Password reset successful'])
-            : response()->json(['message' => 'Failed'], 422);
+        if ($status === Password::PASSWORD_RESET) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Password reset successful.',
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Password reset failed.',
+        ], 422);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Change Password
+    |--------------------------------------------------------------------------
+    */
     public function changePassword(Request $request)
     {
         $request->validate([
-            'current_password' => 'required',
-            'new_password' => 'required|min:6|confirmed',
+            'current_password'           => 'required',
+            'new_password'               => 'required|min:6|confirmed',
         ]);
 
         $user = $request->user();
 
-        // check current password
         if (!Hash::check($request->current_password, $user->password)) {
             return response()->json([
-                'message' => 'Current password is incorrect'
+                'success' => false,
+                'message' => 'Current password is incorrect.',
             ], 400);
         }
 
-        // update password
         $user->password = Hash::make($request->new_password);
         $user->save();
 
-        // 🔥 logout all devices after password change
+        // force logout all devices
         $user->tokens()->delete();
 
         return response()->json([
-            'message' => 'Password changed successfully. Please login again.'
+            'success' => true,
+            'message' => 'Password changed successfully. Please login again.',
         ]);
     }
 
-
+    /*
+    |--------------------------------------------------------------------------
+    | Google Login
+    |--------------------------------------------------------------------------
+    */
     public function googleLogin(Request $request)
     {
         $request->validate([
-            'token' => 'required'
+            'token' => 'required',
         ]);
 
-        // 🔥 Verify token with Google
-        $googleUser = Http::get('https://oauth2.googleapis.com/tokeninfo', [
-            'id_token' => $request->token
-        ])->json();
+        $googleUser = Http::get(
+            'https://oauth2.googleapis.com/tokeninfo',
+            ['id_token' => $request->token]
+        )->json();
 
         if (!isset($googleUser['email'])) {
-            return response()->json(['message' => 'Invalid Google token'], 401);
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid Google token.',
+            ], 401);
         }
 
-        // 🔍 Find or create user
         $user = User::where('email', $googleUser['email'])->first();
 
         if (!$user) {
             $user = User::create([
-                'name' => $googleUser['name'] ?? 'Google User',
-                'email' => $googleUser['email'],
-                'password' => Hash::make(Str::random(16)), // dummy password
-                'role_id' => 2,
-                'status' => 1,
+                'name'      => $googleUser['name'] ?? 'Google User',
+                'email'     => $googleUser['email'],
+                'password'  => Hash::make(Str::random(16)),
+                'role_id'   => 2,
+                'status'    => 1,
             ]);
         }
 
         if (!$user->status) {
-            return response()->json(['message' => 'Account disabled'], 403);
+            return response()->json([
+                'success' => false,
+                'message' => 'Account disabled.',
+            ], 403);
         }
 
-        // ✅ remove old tokens (same as login)
-        $user->tokens()->delete();
+        $user->load('role.permissions');
 
         $user->last_login_at = now();
         $user->save();
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        // 🔥 Load role + permissions (same as login)
-        $user->load('role.permissions');
-
-        $permissions = $user->role
-            ? $user->role->permissions->map(function ($permission) {
-                return [
-                    'module' => $permission->module,
-                    'action' => $permission->action,
-                ];
-            })
-            : collect();
-
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-            ],
-            'role' => $user->role->name ?? null,
-            'permissions' => $permissions,
-            'access_token' => $token,
-            'token_type' => 'Bearer'
+            'success'       => true,
+            'message'       => 'Login successful.',
+            'user'          => $this->formatUser($user),
+            'role'          => $user->role->name ?? null,
+            'permissions'   => $this->formatPermissions($user),
+            'access_token'  => $token,
+            'token_type'    => 'Bearer',
         ]);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
+    private function formatUser($user)
+    {
+        return [
+            'id'        => $user->id,
+            'name'      => $user->name,
+            'email'     => $user->email,
+            'phone'     => $user->phone,
+        ];
+    }
+
+    private function formatPermissions($user)
+    {
+        if (!$user->role || !$user->role->permissions) {
+            return [];
+        }
+
+        return $user->role->permissions->map(function ($permission) {
+            return [
+                'module' => $permission->module,
+                'action' => $permission->action,
+            ];
+        })->values();
+    }
 }
