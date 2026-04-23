@@ -40,7 +40,7 @@ class OtpController extends Controller
     // ----------------------------
     // Send OTP
     // ----------------------------
-    public function sendOtp(Request $request)
+   public function sendOtp(Request $request)
 {
     $request->validate([
         'identifier' => 'required',
