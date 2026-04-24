@@ -16,10 +16,7 @@ class CartController extends Controller
      */
     private function formatCartResponse($cart, $guestToken = null)
     {
-        // $cart = $cart->fresh([
-        //     'items.product.images',
-        //     'items.variant'
-        // ]);
+
         $cart->loadMissing([
             'items.product.images',
             'items.variant'
@@ -45,12 +42,7 @@ class CartController extends Controller
         $user = Auth::guard('sanctum')->user();
         $guestToken = $request->header('Guest-Token');
 
-        // if (!$user && !$guestToken) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'message' => 'User or Guest token required'
-        //     ], 400);
-        // }
+
         if (!$user && !$guestToken) {
             $guestToken = bin2hex(random_bytes(16));
 
