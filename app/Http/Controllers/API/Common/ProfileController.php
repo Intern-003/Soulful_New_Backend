@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Common;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\UserProfile;
+use App\Services\ImageUploadService;
 
 class ProfileController extends Controller
 {
@@ -55,68 +56,79 @@ class ProfileController extends Controller
     // ----------------------------
     // Upload Avatar
     // ----------------------------
-    public function uploadAvatar(Request $request)
-    {
-        $request->validate([
-            'avatar' => 'required|image|mimes:jpeg,png,jpg|max:2048',
-        ]);
+// ----------------------------
+// Upload Avatar
+// ----------------------------
+public function uploadAvatar(Request $request)
+{
+    $request->validate([
+        'avatar' => 'required|image|mimes:jpeg,png,jpg,webp|max:4096',
+    ]);
 
-        $user = $request->user();
+    $user = $request->user();
 
-        $profile = UserProfile::firstOrCreate([
-            'user_id' => $user->id
-        ]);
+    // Create profile if not exists
+    $profile = UserProfile::firstOrCreate([
+        'user_id' => $user->id
+    ]);
 
-        $file = $request->file('avatar');
+    // ================= WEBP AVATAR UPLOAD =================
+    if ($request->hasFile('avatar')) {
 
-        $filename = time() . '_' . $user->id . '.' . $file->getClientOriginalExtension();
+        // Delete old avatar
+        if ($profile->avatar) {
 
-        $destination = public_path('uploads/avatars');
-
-        if (!file_exists($destination)) {
-            mkdir($destination, 0755, true);
+            ImageUploadService::deleteImage($profile->avatar);
         }
 
-        // delete old avatar
-        if ($profile->avatar && file_exists(public_path($profile->avatar))) {
-            unlink(public_path($profile->avatar));
-        }
+        // Upload new avatar
+        $profile->avatar = ImageUploadService::uploadWebp(
+            $request->file('avatar'),
+            'avatars',
+            500,
+            80
+        );
 
-        $file->move($destination, $filename);
-
-        $profile->avatar = 'uploads/avatars/' . $filename;
         $profile->save();
-
-        return response()->json([
-            'message' => 'Avatar uploaded successfully',
-            'avatar_url' => url($profile->avatar)
-        ]);
     }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Avatar uploaded successfully',
+        'avatar_url' => asset($profile->avatar)
+    ]);
+}
 
     // ----------------------------
     // Delete Avatar
     // ----------------------------
-    public function deleteAvatar(Request $request)
-    {
-        $user = $request->user();
+// ----------------------------
+// Delete Avatar
+// ----------------------------
+public function deleteAvatar(Request $request)
+{
+    $user = $request->user();
 
-        $profile = $user->profile;
+    $profile = $user->profile;
 
-        if (!$profile || !$profile->avatar) {
-            return response()->json([
-                'message' => 'No avatar found'
-            ], 404);
-        }
-
-        if (file_exists(public_path($profile->avatar))) {
-            unlink(public_path($profile->avatar));
-        }
-
-        $profile->avatar = null;
-        $profile->save();
+    if (!$profile || !$profile->avatar) {
 
         return response()->json([
-            'message' => 'Avatar deleted successfully'
-        ]);
+            'success' => false,
+            'message' => 'No avatar found'
+        ], 404);
     }
+
+    // Delete avatar image
+    ImageUploadService::deleteImage($profile->avatar);
+
+    // Remove DB value
+    $profile->avatar = null;
+    $profile->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Avatar deleted successfully'
+    ]);
+}
 }

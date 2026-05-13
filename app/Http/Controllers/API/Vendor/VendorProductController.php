@@ -12,6 +12,7 @@ use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Vendor;
 use App\Models\User;
+use App\Services\ImageUploadService;
 
 class VendorProductController extends Controller
 {
@@ -367,15 +368,15 @@ class VendorProductController extends Controller
 
         $images = ProductImage::where('product_id', $product->id)->get();
 
-        foreach ($images as $image) {
-            if ($image->image_url) {
-                $path = str_replace(url('/storage/'), 'public/', $image->image_url);
-                if (Storage::exists($path)) {
-                    Storage::delete($path);
-                }
-            }
-            $image->delete();
-        }
+foreach ($images as $image) {
+
+    if ($image->image_url) {
+
+        ImageUploadService::deleteImage($image->image_url);
+    }
+
+    $image->delete();
+}
 
         ProductVariant::where('product_id', $product->id)->delete();
         $product->specifications()->delete();  // ✅ Also delete specifications

@@ -9,6 +9,7 @@ use App\Models\ProductVariant;
 use App\Models\ProductVariantAttribute;
 use App\Models\AttributeValue;
 use App\Models\ProductImage;
+use App\Services\ImageUploadService;
 
 class VendorVariantController extends Controller
 {
@@ -53,87 +54,85 @@ class VendorVariantController extends Controller
     // =========================
     // IMAGE UPLOAD HELPER
     // =========================
-    private function uploadImages($files, $productId, $variantId)
-    {
-        if (!$files)
-            return [];
-
-        $uploadedImages = [];
-
-        foreach ($files as $index => $file) {
-            $originalName = $file->getClientOriginalName();
-            $name = pathinfo($originalName, PATHINFO_FILENAME);
-            $extension = $file->getClientOriginalExtension();
-
-            // Generate unique filename
-            $tempFilename = time() . '_' . uniqid() . '.' . $extension;
-            $destination = public_path('uploads/variants');
-
-            if (!file_exists($destination)) {
-                mkdir($destination, 0755, true);
-            }
-
-            // Move file with temp name
-            $file->move($destination, $tempFilename);
-
-            // Create DB entry with image_url field
-            $image = ProductImage::create([
-                'product_id' => $productId,
-                'variant_id' => $variantId,
-                'image_url' => 'uploads/variants/' . $tempFilename,
-                'is_primary' => $index === 0 ? 1 : 0,
-                'sort_order' => $index
-            ]);
-
-            // Rename file with ID for better organization
-            $newFilename = $name . '_' . $image->id . '.' . $extension;
-            if (file_exists($destination . '/' . $tempFilename)) {
-                rename(
-                    $destination . '/' . $tempFilename,
-                    $destination . '/' . $newFilename
-                );
-            }
-
-            // Update DB with new filename
-            $image->update([
-                'image_url' => 'uploads/variants/' . $newFilename
-            ]);
-
-            $uploadedImages[] = $image;
-        }
-
-        // Ensure one primary image
-        $variant = ProductVariant::find($variantId);
-        if ($variant && $variant->images()->where('is_primary', 1)->count() === 0) {
-            $first = $variant->images()->first();
-            if ($first)
-                $first->update(['is_primary' => 1]);
-        }
-
-        return $uploadedImages;
+// =========================
+// IMAGE UPLOAD HELPER
+// =========================
+private function uploadImages($files, $productId, $variantId)
+{
+    if (!$files) {
+        return [];
     }
+
+    $uploadedImages = [];
+
+    foreach ($files as $index => $file) {
+
+        // ================= WEBP IMAGE UPLOAD =================
+        $imagePath = ImageUploadService::uploadWebp(
+            $file,
+            'variants',
+            1200,
+            80
+        );
+
+        // ================= CREATE IMAGE RECORD =================
+        $image = ProductImage::create([
+            'product_id' => $productId,
+            'variant_id' => $variantId,
+            'image_url' => $imagePath,
+            'is_primary' => $index === 0 ? 1 : 0,
+            'sort_order' => $index
+        ]);
+
+        $uploadedImages[] = $image;
+    }
+
+    // ================= ENSURE PRIMARY IMAGE =================
+    $variant = ProductVariant::find($variantId);
+
+    if ($variant && $variant->images()->where('is_primary', 1)->count() === 0) {
+
+        $first = $variant->images()->first();
+
+        if ($first) {
+            $first->update([
+                'is_primary' => 1
+            ]);
+        }
+    }
+
+    return $uploadedImages;
+}
 
     // =========================
     // DELETE IMAGES HELPER (NEW)
     // =========================
-    private function deleteImages($imageIds)
-    {
-        if (!$imageIds || !is_array($imageIds))
-            return;
+// =========================
+// DELETE IMAGES HELPER
+// =========================
+private function deleteImages($imageIds)
+{
+    if (!$imageIds || !is_array($imageIds)) {
+        return;
+    }
 
-        foreach ($imageIds as $imageId) {
-            $image = ProductImage::find($imageId);
-            if ($image) {
-                // Delete physical file
-                $path = public_path($image->image_url);
-                if (file_exists($path)) {
-                    unlink($path);
-                }
-                // Delete database record
-                $image->delete();
+    foreach ($imageIds as $imageId) {
+
+        $image = ProductImage::find($imageId);
+
+        if ($image) {
+
+            // ================= DELETE FILE =================
+            if ($image->image_url) {
+
+                ImageUploadService::deleteImage($image->image_url);
             }
+
+            // ================= DELETE DB RECORD =================
+            $image->delete();
         }
     }
+}
 
     // =========================
     // STORE VARIANT
@@ -282,23 +281,34 @@ class VendorVariantController extends Controller
     // =========================
     // DELETE VARIANT
     // =========================
-    public function deleteVariant($id)
-    {
-        $variant = ProductVariant::findOrFail($id);
+// =========================
+// DELETE VARIANT
+// =========================
+public function deleteVariant($id)
+{
+    $variant = ProductVariant::findOrFail($id);
 
-        foreach ($variant->images as $img) {
-            $path = public_path($img->image_url);
-            if (file_exists($path)) {
-                unlink($path);
-            }
-            $img->delete();
+    foreach ($variant->images as $img) {
+
+        // ================= DELETE IMAGE =================
+        if ($img->image_url) {
+
+            ImageUploadService::deleteImage($img->image_url);
         }
 
-        $variant->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Variant deleted successfully'
-        ]);
+        // ================= DELETE IMAGE RECORD =================
+        $img->delete();
     }
+
+    // ================= DELETE ATTRIBUTE LINKS =================
+    ProductVariantAttribute::where('variant_id', $variant->id)->delete();
+
+    // ================= DELETE VARIANT =================
+    $variant->delete();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Variant deleted successfully'
+    ]);
+}
 }

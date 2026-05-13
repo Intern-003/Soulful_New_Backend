@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use App\Services\ImageUploadService;
 
 class AdminBrandController extends Controller
 {
@@ -69,52 +70,50 @@ class AdminBrandController extends Controller
     // ===============================
     // ✅ STORE
     // ===============================
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|unique:brands,slug',
-            'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'nullable|boolean',
-            'subcategory_ids' => 'nullable|array',
-            'subcategory_ids.*' => 'exists:categories,id'
-        ]);
+// ===============================
+// ✅ STORE
+// ===============================
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'name' => 'required|string|max:255|unique:brands,name',
+        'slug' => 'nullable|string|unique:brands,slug',
+        'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+        'status' => 'nullable|boolean',
+        'subcategory_ids' => 'nullable|array',
+        'subcategory_ids.*' => 'exists:categories,id'
+    ]);
 
-        $validated['slug'] = $validated['slug'] ?? Str::slug($validated['name']);
+    // Generate slug if not provided
+    $validated['slug'] = $validated['slug'] ?? Str::slug($validated['name']);
 
-        // ================= FILE UPLOAD =================
-        if ($request->hasFile('logo')) {
-            $file = $request->file('logo');
+    // ================= WEBP LOGO UPLOAD =================
+    if ($request->hasFile('logo')) {
 
-            $filename = time() . '_' . Str::slug(
-                pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)
-            ) . '.' . $file->getClientOriginalExtension();
-
-            $destination = public_path('uploads/brands');
-
-            if (!file_exists($destination)) {
-                mkdir($destination, 0755, true);
-            }
-
-            $file->move($destination, $filename);
-
-            $validated['logo'] = 'uploads/brands/' . $filename;
-        }
-
-        // ================= CREATE =================
-        $brand = Brand::create($validated);
-
-        // ================= SYNC SUBCATEGORIES =================
-        if ($request->subcategory_ids) {
-            $brand->subcategories()->sync($request->subcategory_ids);
-        }
-
-        return response()->json([
-            'message' => 'Brand created successfully',
-            'data' => $brand->load('subcategories'),
-            'logo_url' => $brand->logo ? asset($brand->logo) : null
-        ], 201);
+        $validated['logo'] = ImageUploadService::uploadWebp(
+            $request->file('logo'),
+            'brands',
+            600,
+            80
+        );
     }
+
+    // ================= CREATE =================
+    $brand = Brand::create($validated);
+
+    // ================= SYNC SUBCATEGORIES =================
+    if ($request->filled('subcategory_ids')) {
+
+        $brand->subcategories()->sync($request->subcategory_ids);
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Brand created successfully',
+        'data' => $brand->load('subcategories'),
+        'logo_url' => $brand->logo ? asset($brand->logo) : null
+    ], 201);
+}
 
     // ===============================
     // ✅ SHOW
@@ -130,72 +129,84 @@ class AdminBrandController extends Controller
     // ===============================
     // ✅ UPDATE
     // ===============================
-    public function update(Request $request, Brand $brand)
-    {
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'slug' => 'nullable|string|unique:brands,slug,' . $brand->id,
-            'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'status' => 'nullable|boolean',
-            'subcategory_ids' => 'nullable|array',
-            'subcategory_ids.*' => 'exists:categories,id'
-        ]);
+ // ===============================
+// ✅ UPDATE
+// ===============================
+public function update(Request $request, Brand $brand)
+{
+    $validated = $request->validate([
+        'name' => 'sometimes|required|string|max:255|unique:brands,name,' . $brand->id,
+        'slug' => 'nullable|string|unique:brands,slug,' . $brand->id,
+        'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
+        'status' => 'nullable|boolean',
+        'subcategory_ids' => 'nullable|array',
+        'subcategory_ids.*' => 'exists:categories,id'
+    ]);
 
-        if (isset($validated['name']) && !isset($validated['slug'])) {
-            $validated['slug'] = Str::slug($validated['name']);
-        }
+    // Generate slug if name updated but slug not sent
+    if (isset($validated['name']) && !isset($validated['slug'])) {
 
-        // ================= FILE UPDATE =================
-        if ($request->hasFile('logo')) {
-            $file = $request->file('logo');
-
-            $filename = time() . '_' . Str::slug(
-                pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)
-            ) . '.' . $file->getClientOriginalExtension();
-
-            $destination = public_path('uploads/brands');
-
-            if (!file_exists($destination)) {
-                mkdir($destination, 0755, true);
-            }
-
-            // delete old logo
-            if ($brand->logo && file_exists(public_path($brand->logo))) {
-                unlink(public_path($brand->logo));
-            }
-
-            $file->move($destination, $filename);
-
-            $validated['logo'] = 'uploads/brands/' . $filename;
-        }
-
-        $brand->update($validated);
-
-        // ================= SYNC SUBCATEGORIES =================
-        if ($request->has('subcategory_ids')) {
-            $brand->subcategories()->sync($request->subcategory_ids);
-        }
-
-        return response()->json([
-            'message' => 'Brand updated successfully',
-            'data' => $brand->load('subcategories'),
-            'logo_url' => $brand->logo ? asset($brand->logo) : null
-        ]);
+        $validated['slug'] = Str::slug($validated['name']);
     }
+
+    // ================= WEBP LOGO UPDATE =================
+    if ($request->hasFile('logo')) {
+
+        // Delete old logo
+        if ($brand->logo) {
+
+            ImageUploadService::deleteImage($brand->logo);
+        }
+
+        // Upload new logo
+        $validated['logo'] = ImageUploadService::uploadWebp(
+            $request->file('logo'),
+            'brands',
+            600,
+            80
+        );
+    }
+
+    // ================= UPDATE =================
+    $brand->update($validated);
+
+    // ================= SYNC SUBCATEGORIES =================
+    if ($request->has('subcategory_ids')) {
+
+        $brand->subcategories()->sync($request->subcategory_ids);
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Brand updated successfully',
+        'data' => $brand->load('subcategories'),
+        'logo_url' => $brand->logo ? asset($brand->logo) : null
+    ]);
+}
 
     // ===============================
     // ✅ DELETE
     // ===============================
-    public function destroy(Brand $brand)
-    {
-        if ($brand->logo && file_exists(public_path($brand->logo))) {
-            unlink(public_path($brand->logo));
-        }
+// ===============================
+// ✅ DELETE
+// ===============================
+public function destroy(Brand $brand)
+{
+    // Delete logo if exists
+    if ($brand->logo) {
 
-        $brand->delete();
-
-        return response()->json([
-            'message' => 'Brand deleted successfully'
-        ]);
+        ImageUploadService::deleteImage($brand->logo);
     }
+
+    // Detach subcategories
+    $brand->subcategories()->detach();
+
+    // Delete brand
+    $brand->delete();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Brand deleted successfully'
+    ]);
+}
 }
