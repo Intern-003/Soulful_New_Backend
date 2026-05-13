@@ -5,58 +5,75 @@ namespace App\Http\Controllers\API\Vendor;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\VendorDocument;
+use App\Services\ImageUploadService;
 
 class VendorDocumentController extends Controller
 {
-    public function store(Request $request)
-    {
-        $request->validate([
-            'vendor_id' => 'required|exists:vendors,id',
-            'document_type' => 'required|string',
-            'document_number' => 'required|string',
-            'document_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:4096'
-        ]);
+public function store(Request $request)
+{
+    $request->validate([
+        'vendor_id' => 'required|exists:vendors,id',
+        'document_type' => 'required|string|max:255',
+        'document_number' => 'required|string|max:255',
+        'document_file' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:5120'
+    ]);
 
-        $file = $request->file('document_file');
+    $file = $request->file('document_file');
 
-        // original name
-        $originalName = $file->getClientOriginalName();
+    // =========================
+    // CREATE DIRECTORY
+    // =========================
+    $destination = public_path('uploads/vendor_documents');
 
-        // filename without extension
-        $name = pathinfo($originalName, PATHINFO_FILENAME);
+    if (!file_exists($destination)) {
+        mkdir($destination, 0755, true);
+    }
 
-        // extension
-        $extension = $file->getClientOriginalExtension();
+    // =========================
+    // HANDLE IMAGE FILES
+    // =========================
+    if (in_array($file->getClientOriginalExtension(), ['jpg', 'jpeg', 'png', 'webp'])) {
 
-        // unique filename (add vendor_id)
-        $filename = time() . '_' . $request->vendor_id . '.' . $extension;
-        // upload path
-        $destination = public_path('uploads/vendor_documents');
+        $filePath = ImageUploadService::uploadWebp(
+            $file,
+            'vendor_documents',
+            1200,
+            80
+        );
+    }
 
-        // create folder if not exists
-        if (!file_exists($destination)) {
-            mkdir($destination, 0755, true);
-        }
+    // =========================
+    // HANDLE PDF FILES
+    // =========================
+    else {
 
-        // move file
+        $filename = time() . '_' . uniqid() . '.pdf';
+
         $file->move($destination, $filename);
 
-        // save in DB
-        $document = VendorDocument::create([
-            'vendor_id' => $request->vendor_id,
-            'document_type' => $request->document_type,
-            'document_number' => $request->document_number,
-            'document_file' => 'uploads/vendor_documents/' . $filename,
-            'status' => 'pending'
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Document uploaded successfully',
-            'data' => $document,
-            'url' => url($document->document_file)
-        ], 201);
+        $filePath = 'uploads/vendor_documents/' . $filename;
     }
+
+    // =========================
+    // SAVE DOCUMENT
+    // =========================
+    $document = VendorDocument::create([
+        'vendor_id' => $request->vendor_id,
+        'document_type' => $request->document_type,
+        'document_number' => $request->document_number,
+        'document_file' => $filePath,
+        'status' => 'pending'
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Document uploaded successfully',
+        'data' => $document,
+        'url' => asset($document->document_file)
+    ], 201);
+}
+
+
     public function index(Request $request)
 {
     $vendor = $request->user()->vendor;
