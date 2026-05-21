@@ -408,3 +408,5 @@ Route::get('/brands/category/{id}', [AdminBrandController::class, 'getBrandsByCa
     Route::get('brands/{brand}', [AdminBrandController::class, 'show']);
 Route::middleware('auth:sanctum')->post('/vendor/register', [VendorRegisterController::class, 'register']);
 Route::middleware('auth:sanctum')->post('/vendor/submit',[VendorRegisterController::class, 'submit']);
+Route::get('/admin/brands/{brand}/products',  [AdminBrandController::class, 'products']
+);
