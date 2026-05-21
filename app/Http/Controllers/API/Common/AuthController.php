@@ -11,99 +11,246 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use App\Http\Controllers\API\Common\OtpController;
+use App\Models\Otp;
+use App\Services\MailService;
 
 class AuthController extends Controller
 {
 
-public function register(Request $request)
-{
-    $request->validate([
-        'name' => 'required|string|max:255',
-        'email' => 'nullable|email|unique:users,email',
-        'phone' => 'nullable|string|unique:users,phone',
-        'password' => 'required|string|min:6|confirmed',
-        'type' => 'required|in:email,phone'
-    ]);
+    public function register(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email',  // Removed unique check here
+            'phone' => 'nullable|string',  // Removed unique check here
+            'password' => 'required|string|min:6|confirmed',
+            'type' => 'required|in:email,phone',
+        ]);
 
-    $identifier = $request->type === 'email'
-        ? $request->email
-        : $request->phone;
+        // identifier for OTP sending
+        $identifier = $request->type === 'email'
+            ? $request->email
+            : $request->phone;
 
-    // call OTP controller
-    app(OtpController::class)->sendOtp(new Request([
-        'identifier' => $identifier,
-        'type' => $request->type
-    ]));
+        if (!$identifier) {
+            return response()->json([
+                'success' => false,
+                'message' => $request->type === 'email' ? 'Email is required' : 'Phone is required'
+            ], 422);
+        }
 
-    return response()->json([
-        'message' => 'OTP sent. Please verify to complete registration'
-    ]);
-}
+        // Check if user already exists in users table
+        $userExists = User::where('email', $request->email)
+            ->orWhere('phone', $request->phone)
+            ->exists();
 
-public function verifyRegister(Request $request)
-{
-    $request->validate([
-        'identifier' => 'required',
-        'type' => 'required|in:email,phone',
-        'otp' => 'required',
-        'name' => 'required|string',
-        'password' => 'required|string|min:6',
-    ]);
+        if ($userExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User with this email or phone already exists'
+            ], 400);
+        }
 
-    $otpController = app(OtpController::class);
+        // resend protection (30 seconds cooldown)
+        $existing = Otp::where('identifier', $identifier)
+            ->where('type', $request->type)
+            ->first();
 
-    $result = $otpController->verifyOtpInternal(
-        $request->identifier,
-        $request->type,
-        $request->otp
-    );
+        if ($existing && now()->lt($existing->created_at->addSeconds(30))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please wait 30 seconds before requesting another OTP'
+            ], 429);
+        }
 
-    if (!$result['status']) {
-        return response()->json(['message' => $result['message']], 400);
+        $otp = rand(100000, 999999);
+
+        // Store or update OTP record
+        Otp::updateOrCreate(
+            [
+                'identifier' => $identifier,
+                'type' => $request->type,
+            ],
+            [
+                'otp' => $otp,
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'password' => Hash::make($request->password),
+                'attempts' => 0,
+                'blocked_until' => null,
+                'expires_at' => now()->addMinutes(10), // Increased to 10 minutes
+            ]
+        );
+
+        // SEND OTP
+        if ($request->type === 'email') {
+            MailService::sendOtpEmail($request->email, $otp);
+        }
+
+        if ($request->type === 'phone') {
+            // TODO: Integrate SMS service
+            // For now, return OTP in response for testing (remove in production)
+            // You can use services like Twilio, Vonage, etc.
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'OTP sent successfully to your ' . $request->type,
+            'debug_otp' => app()->environment('local') ? $otp : null, // Only for testing
+        ]);
     }
 
-    // ✅ CREATE USER AFTER OTP SUCCESS
-    $user = User::create([
-        'name' => $request->name,
-        'email' => $request->type === 'email' ? $request->identifier : null,
-        'phone' => $request->type === 'phone' ? $request->identifier : null,
-        'password' => Hash::make($request->password),
-        'role_id' => 2,
-        'status' => 1
-    ]);
+    public function verifyRegister(Request $request)
+    {
+        $request->validate([
+            'identifier' => 'required',
+            'type' => 'required|in:email,phone',
+            'otp' => 'required|string|size:6',
+        ]);
 
-    return response()->json([
-        'message' => 'Registration successful'
-    ]);
-}
-    // ----------------------------
-    // Register
-    // ----------------------------
-    // public function register(Request $request)
-    // {
-    //     $request->validate([
-    //         'name' => 'required|string|max:255',
-    //         'email' => 'required|email|unique:users,email',
-    //         'password' => 'required|string|min:6|confirmed',
-    //         'phone' => 'nullable|string',
-    //     ]);
+        $record = Otp::where('identifier', $request->identifier)
+            ->where('type', $request->type)
+            ->first();
 
-    //     $user = User::create([
-    //         'name' => $request->name,
-    //         'email' => $request->email,
-    //         'password' => Hash::make($request->password),
-    //         'phone' => $request->phone,
-    //         'role_id' => 2 // 🔥 no role from user side
-    //     ]);
+        if (!$record) {
+            return response()->json([
+                'success' => false,
+                'message' => 'OTP not found. Please request a new OTP.'
+            ], 404);
+        }
 
-    //     $token = $user->createToken('auth_token')->plainTextToken;
+        // Check if OTP is expired
+        if (now()->gt($record->expires_at)) {
+            $record->delete();
+            return response()->json([
+                'success' => false,
+                'message' => 'OTP has expired. Please request a new OTP.'
+            ], 400);
+        }
 
-    //     return response()->json([
-    //         'user' => $user,
-    //         'access_token' => $token,
-    //         'token_type' => 'Bearer',
-    //     ], 201);
-    // }
+        // Check blocked status
+        if ($record->blocked_until && now()->lt($record->blocked_until)) {
+            $remainingMinutes = now()->diffInMinutes($record->blocked_until);
+            return response()->json([
+                'success' => false,
+                'message' => "Too many failed attempts. Please try again after {$remainingMinutes} minutes."
+            ], 429);
+        }
+
+        // Verify OTP
+        if ($record->otp != $request->otp) {
+            $record->increment('attempts');
+            
+            // Block after 5 failed attempts
+            if ($record->attempts >= 5) {
+                $record->update([
+                    'blocked_until' => now()->addMinutes(15)
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Too many failed attempts. Account blocked for 15 minutes.'
+                ], 429);
+            }
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid OTP. ' . (5 - $record->attempts) . ' attempts remaining.'
+            ], 400);
+        }
+
+        // Final duplicate check before creating user
+        $userExists = User::where('email', $record->email)
+            ->orWhere('phone', $record->phone)
+            ->exists();
+
+        if ($userExists) {
+            $record->delete();
+            return response()->json([
+                'success' => false,
+                'message' => 'User already exists with this email or phone number.'
+            ], 400);
+        }
+
+        // Create user
+        $emailVerifiedAt = $record->type === 'email' ? now() : null;
+        $phoneVerifiedAt = $record->type === 'phone' ? now() : null;
+
+        $user = User::create([
+            'name' => $record->name,
+            'email' => $record->email,
+            'phone' => $record->phone,
+            'password' => $record->password, // Already hashed
+            'role_id' => 2,
+            'status' => true,
+            'email_verified_at' => $emailVerifiedAt,
+            'phone_verified_at' => $phoneVerifiedAt,
+        ]);
+
+        // Clean up OTP record
+        $record->delete();
+
+        // Create login token
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Registration successful!',
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $this->formatUser($user),
+        ]);
+    }
+
+    // Resend OTP endpoint
+    public function resendOtp(Request $request)
+    {
+        $request->validate([
+            'identifier' => 'required',
+            'type' => 'required|in:email,phone',
+        ]);
+
+        $record = Otp::where('identifier', $request->identifier)
+            ->where('type', $request->type)
+            ->first();
+
+        if (!$record) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No pending registration found.'
+            ], 404);
+        }
+
+        // Check cooldown (30 seconds)
+        if (now()->lt($record->created_at->addSeconds(30))) {
+            $waitTime = 30 - now()->diffInSeconds($record->created_at);
+            return response()->json([
+                'success' => false,
+                'message' => "Please wait {$waitTime} seconds before requesting another OTP."
+            ], 429);
+        }
+
+        // Generate new OTP
+        $newOtp = rand(100000, 999999);
+        
+        $record->update([
+            'otp' => $newOtp,
+            'attempts' => 0,
+            'blocked_until' => null,
+            'expires_at' => now()->addMinutes(10),
+        ]);
+
+        // Resend OTP
+        if ($request->type === 'email') {
+            MailService::sendOtpEmail($record->email, $newOtp);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'New OTP sent successfully.',
+            'debug_otp' => app()->environment('local') ? $newOtp : null,
+        ]);
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -113,8 +260,8 @@ public function verifyRegister(Request $request)
     public function login(Request $request)
     {
         $request->validate([
-            'email'     => 'required|email',
-            'password'  => 'required|string',
+            'email' => 'required|email',
+            'password' => 'required|string',
         ]);
 
         $user = User::with('role.permissions')
@@ -134,26 +281,19 @@ public function verifyRegister(Request $request)
             ], 403);
         }
 
-        /*
-        IMPORTANT FIX:
-        Removed ->tokens()->delete()
-        It was invalidating tokens in other tabs/sessions
-        causing Unauthenticated issue.
-        */
-
         $user->last_login_at = now();
         $user->save();
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'success'       => true,
-            'message'       => 'Login successful.',
-            'user'          => $this->formatUser($user),
-            'role'          => $user->role->name ?? null,
-            'permissions'   => $this->formatPermissions($user),
-            'access_token'  => $token,
-            'token_type'    => 'Bearer',
+            'success' => true,
+            'message' => 'Login successful.',
+            'user' => $this->formatUser($user),
+            'role' => $user->role->name ?? null,
+            'permissions' => $this->formatPermissions($user),
+            'access_token' => $token,
+            'token_type' => 'Bearer',
         ]);
     }
 
@@ -194,7 +334,6 @@ public function verifyRegister(Request $request)
 
         if ($currentToken->created_at->lt(now()->subDays(7))) {
             $currentToken->delete();
-
             return response()->json([
                 'success' => false,
                 'message' => 'Token expired.',
@@ -202,14 +341,13 @@ public function verifyRegister(Request $request)
         }
 
         $currentToken->delete();
-
         $newToken = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'success'       => true,
-            'message'       => 'Token refreshed.',
-            'access_token'  => $newToken,
-            'token_type'    => 'Bearer',
+            'success' => true,
+            'message' => 'Token refreshed.',
+            'access_token' => $newToken,
+            'token_type' => 'Bearer',
         ]);
     }
 
@@ -223,10 +361,10 @@ public function verifyRegister(Request $request)
         $user = $request->user()->load('role.permissions');
 
         return response()->json([
-            'success'       => true,
-            'user'          => $this->formatUser($user),
-            'role'          => $user->role->name ?? null,
-            'permissions'   => $this->formatPermissions($user),
+            'success' => true,
+            'user' => $this->formatUser($user),
+            'role' => $user->role->name ?? null,
+            'permissions' => $this->formatPermissions($user),
         ]);
     }
 
@@ -255,7 +393,7 @@ public function verifyRegister(Request $request)
         return response()->json([
             'success' => true,
             'message' => 'Reset token generated.',
-            'token'   => $token,
+            'token' => $token,
         ]);
     }
 
@@ -267,24 +405,17 @@ public function verifyRegister(Request $request)
     public function resetPassword(Request $request)
     {
         $request->validate([
-            'token'                  => 'required',
-            'email'                  => 'required|email',
-            'password'               => 'required|min:6|confirmed',
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => 'required|min:6|confirmed',
         ]);
 
         $status = Password::reset(
-            $request->only(
-                'email',
-                'password',
-                'password_confirmation',
-                'token'
-            ),
+            $request->only('email', 'password', 'password_confirmation', 'token'),
             function ($user, $password) {
                 $user->password = Hash::make($password);
                 $user->save();
-
-                // logout all devices after reset
-                $user->tokens()->delete();
+                $user->tokens()->delete(); // logout all devices after reset
             }
         );
 
@@ -309,8 +440,8 @@ public function verifyRegister(Request $request)
     public function changePassword(Request $request)
     {
         $request->validate([
-            'current_password'           => 'required',
-            'new_password'               => 'required|min:6|confirmed',
+            'current_password' => 'required',
+            'new_password' => 'required|min:6|confirmed',
         ]);
 
         $user = $request->user();
@@ -325,8 +456,7 @@ public function verifyRegister(Request $request)
         $user->password = Hash::make($request->new_password);
         $user->save();
 
-        // force logout all devices
-        $user->tokens()->delete();
+        $user->tokens()->delete(); // force logout all devices
 
         return response()->json([
             'success' => true,
@@ -361,11 +491,12 @@ public function verifyRegister(Request $request)
 
         if (!$user) {
             $user = User::create([
-                'name'      => $googleUser['name'] ?? 'Google User',
-                'email'     => $googleUser['email'],
-                'password'  => Hash::make(Str::random(16)),
-                'role_id'   => 2,
-                'status'    => 1,
+                'name' => $googleUser['name'] ?? 'Google User',
+                'email' => $googleUser['email'],
+                'password' => Hash::make(Str::random(16)),
+                'role_id' => 2,
+                'status' => 1,
+                'email_verified_at' => now(), // Google emails are verified
             ]);
         }
 
@@ -377,20 +508,19 @@ public function verifyRegister(Request $request)
         }
 
         $user->load('role.permissions');
-
         $user->last_login_at = now();
         $user->save();
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'success'       => true,
-            'message'       => 'Login successful.',
-            'user'          => $this->formatUser($user),
-            'role'          => $user->role->name ?? null,
-            'permissions'   => $this->formatPermissions($user),
-            'access_token'  => $token,
-            'token_type'    => 'Bearer',
+            'success' => true,
+            'message' => 'Login successful.',
+            'user' => $this->formatUser($user),
+            'role' => $user->role->name ?? null,
+            'permissions' => $this->formatPermissions($user),
+            'access_token' => $token,
+            'token_type' => 'Bearer',
         ]);
     }
 
@@ -402,10 +532,10 @@ public function verifyRegister(Request $request)
     private function formatUser($user)
     {
         return [
-            'id'        => $user->id,
-            'name'      => $user->name,
-            'email'     => $user->email,
-            'phone'     => $user->phone,
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
         ];
     }
 

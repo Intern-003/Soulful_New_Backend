@@ -14,6 +14,9 @@ class OrderItem extends Model
     public function product() { return $this->belongsTo(Product::class); }
     public function variant() { return $this->belongsTo(ProductVariant::class,'variant_id'); }
     public function vendor() { return $this->belongsTo(Vendor::class); }
+
+    public function creator() { return $this->belongsTo(User::class, 'creator_id'); }  // ✅ Add this relationship
+
     public function vendorTransactions() { return $this->hasMany(VendorTransaction::class); }
 
     public function shipment() {
