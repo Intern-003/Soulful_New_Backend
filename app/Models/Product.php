@@ -90,4 +90,5 @@ class Product extends Model
         return $this->belongsToMany(Banner::class, 'banner_products')
             ->withPivot('position');
     }
+    
 }
