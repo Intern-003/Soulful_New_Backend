@@ -230,9 +230,32 @@ class AdminBrandController extends Controller
         // Delete brand
         $brand->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Brand deleted successfully'
-        ]);
-    }
+    return response()->json([
+        'success' => true,
+        'message' => 'Brand deleted successfully'
+    ]);
+}
+
+public function products(Brand $brand)
+{
+    $products = $brand
+        ->products()
+        ->with([
+            'images:id,product_id,image_url,is_primary'
+        ])
+        ->latest('id')
+        ->paginate(20);
+
+    return response()->json([
+        'success' => true,
+        'brand' => [
+            'id' => $brand->id,
+            'name' => $brand->name,
+            'logo' => $brand->logo,
+        ],
+        'data' => $products
+    ]);
+}
+
+
 }
