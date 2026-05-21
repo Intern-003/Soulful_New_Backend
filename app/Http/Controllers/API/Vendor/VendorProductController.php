@@ -32,6 +32,14 @@ class VendorProductController extends Controller
         ];
     }
 
+    private function vendorProductQuery($user)
+    {
+        return Product::where(function ($q) use ($user) {
+            $q->where('vendor_id', optional($user->vendor)->id)
+                ->orWhere('user_id', $user->id);
+        });
+    }
+
     // ✅ STORE PRODUCT
     public function store(Request $request)
     {
@@ -106,15 +114,16 @@ class VendorProductController extends Controller
     // ✅ GET PRODUCT - FIXED with all missing fields
     public function getProductById($id)
     {
-        $product = Product::with([
-            'category',
-            'vendor',
-            'brand',
-            'images',
-            'variants.attributeValues.attribute',
-            'variants.images',  // ✅ ADD THIS - loads variant images
-            'specifications'
-        ])->findOrFail($id);
+        $product = $this->vendorProductQuery(auth()->user())
+            ->with([
+                'category',
+                'vendor',
+                'brand',
+                'images',
+                'variants.attributeValues.attribute',
+                'variants.images',  // ✅ ADD THIS - loads variant images
+                'specifications'
+            ])->findOrFail($id);
 
 
         if ($product->vendor_id) {
@@ -224,7 +233,9 @@ class VendorProductController extends Controller
     // ✅ UPDATE PRODUCT
     public function updateProduct(Request $request, $id)
     {
-        $product = Product::find($id);
+        //$product = Product::find($id);
+        $product = $this->vendorProductQuery(auth()->user())
+            ->findOrFail($id);
 
         if (!$product) {
             return response()->json([
@@ -310,7 +321,9 @@ class VendorProductController extends Controller
     // ✅ UPDATE STOCK
     public function updateStock(Request $request, $id)
     {
-        $product = Product::find($id);
+        //$product = Product::find($id);
+        $product = $this->vendorProductQuery(auth()->user())
+            ->findOrFail($id);
 
         if (!$product) {
             return response()->json([
@@ -357,8 +370,8 @@ class VendorProductController extends Controller
     // ✅ DELETE PRODUCT
     public function deleteProduct($id)
     {
-        $product = Product::find($id);
-
+        $product = $this->vendorProductQuery(auth()->user())
+            ->findOrFail($id);
         if (!$product) {
             return response()->json([
                 'success' => false,
@@ -368,15 +381,15 @@ class VendorProductController extends Controller
 
         $images = ProductImage::where('product_id', $product->id)->get();
 
-foreach ($images as $image) {
+        foreach ($images as $image) {
 
-    if ($image->image_url) {
+            if ($image->image_url) {
 
-        ImageUploadService::deleteImage($image->image_url);
-    }
+                ImageUploadService::deleteImage($image->image_url);
+            }
 
-    $image->delete();
-}
+            $image->delete();
+        }
 
         ProductVariant::where('product_id', $product->id)->delete();
         $product->specifications()->delete();  // ✅ Also delete specifications

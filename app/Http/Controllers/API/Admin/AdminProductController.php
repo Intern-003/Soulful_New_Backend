@@ -70,7 +70,7 @@ class AdminProductController extends Controller
         $newStatus = !$product->status;
 
         // ❌ Block invalid state
-        if (!$product->is_approved && $newStatus) {
+       if ($product->approval_status !== 'approved' && $newStatus){
             return response()->json([
                 'success' => false,
                 'message' => 'Approve product before activating'

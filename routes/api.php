@@ -50,6 +50,7 @@ use App\Http\Controllers\API\Admin\AdminLogController;
 use App\Http\Controllers\API\Admin\AdminBrandController;
 use App\Http\Controllers\API\Admin\AdminProductController;
 use App\Http\Controllers\API\Common\OtpController;
+use App\Http\Controllers\API\Common\BannerController;
 
 /*
 |--------------------------------------------------------------------------
@@ -90,6 +91,7 @@ Route::post('/auth/google', [AuthController::class, 'googleLogin']);
 Route::post('/send-otp', [OtpController::class, 'sendOtp']);
 //Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/verify-register', [AuthController::class, 'verifyRegister']);
+Route::post('/auth/resend-otp', [AuthController::class, 'resendOtp']);
 
 // ==================== PUBLIC VIEW ROUTES (With view permissions) ====================
 Route::get('profile/{id}', [ProfileController::class, 'getProfileById'])->middleware('permission:profile.view');
@@ -134,6 +136,7 @@ Route::prefix('products')->group(function () {
 
     // Route::get('/{identifier}', [ProductController::class, 'show']);
 });
+Route::get('/banners', [BannerController::class, 'getBanners']);
 
 // ==================== VENDOR STORE ROUTES (With vendor view permissions) ====================
 Route::prefix('vendors')->group(function () {
@@ -206,9 +209,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // ==================== WALLET (With wallet permissions) ====================
     Route::get('/wallet', [WalletController::class, 'wallet'])->middleware('permission:wallet.view');
     Route::get('/wallet/transactions', [WalletController::class, 'transactions'])->middleware('permission:wallet.view');
-    Route::get('/vendor/wallet', [VendorWalletController::class, 'wallet'])->middleware('permission:wallet.view');
-    Route::get('/vendor/wallet/transactions', [VendorWalletController::class, 'transactions'])->middleware('permission:wallet.view');
-
+    
     // ==================== REVIEWS (With review permissions) ====================
     Route::post('/reviews', [ReviewController::class, 'store'])->middleware('permission:review.create');
     Route::put('/reviews/{id}', [ReviewController::class, 'updateReview'])->middleware('permission:review.update');
@@ -253,10 +254,17 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
     ->middleware('permission:coupon.view');
 
     // ==================== VENDOR WALLET & ORDERS (With wallet and order permissions) ====================
-    Route::post('/wallet/withdraw', [VendorWalletController::class, 'withdraw'])->middleware('permission:wallet.withdraw');
+    Route::post('/vendor/wallet/withdraw', [VendorWalletController::class, 'withdraw'])->middleware('permission:wallet.withdraw');
+    Route::get('/vendor/wallet', [VendorWalletController::class, 'wallet'])->middleware('permission:wallet.view');
+    Route::get('/vendor/wallet/transactions', [VendorWalletController::class, 'transactions'])->middleware('permission:wallet.view');
+ // ✅ Add this route for withdrawal history
+    Route::get('/vendor/withdrawals', [VendorWalletController::class, 'withdrawals']);
+    
+    // ✅ Make sure withdraw route uses correct endpoint
+    // Route::post('/wallet/withdraw', [VendorWalletController::class, 'withdraw']);
     //Route::post('vendor/orders/{id}/shipment', [VendorOrderController::class, 'createShipment'])->middleware('permission:order.shipment');
     Route::get('vendor/orders/summary', [VendorOrderController::class, 'summary']);
-    Route::get('vendor/orders/', [VendorOrderController::class, 'orders']);
+    Route::get('vendor/orders', [VendorOrderController::class, 'orders']);
     Route::get('vendor/orders/{order_id}', [VendorOrderController::class, 'show']);
     Route::post('vendor/orders/{order_id}/shipment', [VendorOrderController::class, 'createShipment']);
     //Route::patch('vendor/order-items/{item_id}/status', [VendorOrderController::class, 'updateItemStatus']);
@@ -308,10 +316,10 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
         Route::put('/vendors/{id}/commission', [AdminCommissionController::class, 'updateVendorCommission'])->middleware('permission:commission.update');
 
         // Admin Withdraw Request Management
-        Route::get('/withdraw-requests', [AdminWithdrawController::class, 'getWithdrawRequests'])->middleware('permission:withdraw.view');
-        Route::get('/withdraw-requests/{id}', [AdminWithdrawController::class, 'getWithdrawRequest'])->middleware('permission:withdraw.view');
-        Route::put('/withdraw-requests/{id}/approve', [AdminWithdrawController::class, 'approve'])->middleware('permission:withdraw.approve');
-        Route::put('/withdraw-requests/{id}/reject', [AdminWithdrawController::class, 'reject'])->middleware('permission:withdraw.reject');
+        Route::get('/withdraw-requests', [AdminWithdrawController::class, 'getWithdrawRequests']);
+        Route::get('/withdraw-requests/{id}', [AdminWithdrawController::class, 'getWithdrawRequest']);
+        Route::put('/withdraw-requests/{id}/approve', [AdminWithdrawController::class, 'approve']);
+        Route::put('/withdraw-requests/{id}/reject', [AdminWithdrawController::class, 'reject']);
 
         // Admin Banner Management
         Route::get('/banners/{id}', [AdminBannerController::class, 'getBanner']);

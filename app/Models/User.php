@@ -2,13 +2,12 @@
 
 namespace App\Models;
 
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -20,9 +19,15 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'password',
         'phone',
-        'role_id',          // foreign key to Role
-        'status',           // account status
+
+        'role_id',
+
+        'status',
+
         'email_verified_at',
+
+        'phone_verified_at',
+
         'last_login_at',
     ];
 
@@ -38,8 +43,13 @@ class User extends Authenticatable implements MustVerifyEmail
      * The attributes that should be cast to native types.
      */
     protected $casts = [
+
         'email_verified_at' => 'datetime',
+
+        'phone_verified_at' => 'datetime',
+
         'last_login_at' => 'datetime',
+
         'status' => 'boolean',
     ];
 
@@ -52,90 +62,79 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     public function profile()
-{
-    return $this->hasOne(UserProfile::class);
-}
+    {
+        return $this->hasOne(UserProfile::class);
+    }
+
     // ----------------------------
-    // Relationship: User has one Vendor (if role = vendor)
+    // Relationship: User has one Vendor
     // ----------------------------
     public function vendor()
     {
         return $this->hasOne(Vendor::class);
     }
 
+    public function sellerWallet()
+    {
+        return $this->hasOne(VendorWallet::class, 'user_id');
+    }
+
     // ----------------------------
-    // Relationship: User has many Orders (if applicable)
+    // Relationship: User has many Orders
     // ----------------------------
     public function orders()
     {
         return $this->hasMany(Order::class);
     }
-
+    public function withdrawRequests()
+    {
+        return $this->hasMany(WithdrawRequest::class, 'user_id');
+    }
     public function addresses()
     {
         return $this->hasMany(Address::class);
     }
 
-    public function cart() { return $this->hasOne(Cart::class); }
-    public function wishlists() { return $this->hasMany(Wishlist::class); }
-    public function reviews() { return $this->hasMany(Review::class); }
-   
-    public function activityLogs() { return $this->hasMany(ActivityLog::class); }
-
-
-
-public function hasPermission($permissionName)
+    public function cart()
     {
-        if (!$this->role) return false;
+        return $this->hasOne(Cart::class);
+    }
 
-        return $this->role->permissions()
+    public function wishlists()
+    {
+        return $this->hasMany(Wishlist::class);
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function activityLogs()
+    {
+        return $this->hasMany(ActivityLog::class);
+    }
+
+    // ----------------------------
+    // Check permission
+    // ----------------------------
+    public function hasPermission($permissionName)
+    {
+        if (!$this->role) {
+            return false;
+        }
+
+        return $this->role
+            ->permissions()
             ->where('name', $permissionName)
             ->exists();
     }
-    // ----------------------------
-    // 🔹 Helper: Active User
-    // ----------------------------
 
+    // ----------------------------
+    // Helper: Active User
+    // ----------------------------
     public function isActive(): bool
     {
         return $this->status === true;
     }
 }
-
-    // ----------------------------
-    // Check if user has a permission
-    // ----------------------------
-    // public function hasPermission(string $module, string $action): bool
-    // {
-    //     if (!$this->role || !$this->role->permissions) return false;
-
-    //     $permissions = json_decode($this->role->permissions, true);
-
-    //     return isset($permissions[$module]) && in_array($action, $permissions[$module]);
-    // }
-
-    // // ----------------------------
-    // // Helper: Check if user is active
-    // // ----------------------------
-    // public function isActive(): bool
-    // {
-    //     return $this->status === 1;
-    // }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

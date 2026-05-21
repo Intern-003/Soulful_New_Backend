@@ -1,44 +1,5 @@
 <?php
 
-// namespace App\Http\Controllers\API\Admin;
-
-// use App\Http\Controllers\Controller;
-// use Illuminate\Http\Request;
-// use App\Models\Order;
-
-// class AdminOrderController extends Controller
-// {
-//     public function summary()
-// {
-//     $totalOrders = Order::count();
-
-//     $totalRevenue = Order::where('payment_status', 'paid')->sum('total');
-
-//     $pendingOrders = Order::where('order_status', 'placed')->count();
-//     $processingOrders = Order::where('order_status', 'processing')->count();
-//     $deliveredOrders = Order::where('order_status', 'delivered')->count();
-//     $cancelledOrders = Order::where('order_status', 'cancelled')->count();
-
-//     return response()->json([
-//         'success' => true,
-//         'data' => [
-//             'total_orders' => $totalOrders,
-//             'total_revenue' => $totalRevenue,
-//             'status_breakdown' => [
-//                 'placed' => $pendingOrders,
-//                 'processing' => $processingOrders,
-//                 'delivered' => $deliveredOrders,
-//                 'cancelled' => $cancelledOrders,
-//             ]
-//         ]
-//     ]);
-// }
-// }
-
-
-
-
-
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\Controller;
@@ -83,22 +44,18 @@ class AdminOrderController extends Controller
     {
         $query = Order::with(['user', 'items.product']);
 
-        // Filter by status
         if ($request->status) {
             $query->where('order_status', $request->status);
         }
 
-        // Filter by vendor (via order_items)
         if ($request->vendor_id) {
             $query->whereHas('items', function ($q) use ($request) {
                 $q->where('vendor_id', $request->vendor_id);
             });
         }
 
-        // Search by order number or user
         if ($request->search) {
             $search = $request->search;
-
             $query->where(function ($q) use ($search) {
                 $q->where('order_number', 'like', "%$search%")
                   ->orWhereHas('user', function ($uq) use ($search) {
@@ -116,12 +73,17 @@ class AdminOrderController extends Controller
     }
 
     /**
-     * 🔍 Show Single Order
+     * 🔍 Show Single Order - FIXED with vendor and creator relationships
      */
     public function show($id)
     {
-        $order = Order::with(['user', 'items.product'])
-            ->findOrFail($id);
+        $order = Order::with([
+            'user',
+            'items.product',
+            'items.vendor',      // ✅ Load vendor relationship for store name
+            'items.creator',     // ✅ Load creator relationship for individual seller name
+            'address'
+        ])->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -135,7 +97,7 @@ class AdminOrderController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $request->validate([
-            'status' => 'required|string|in:pending,processing,delivered,cancelled'
+            'status' => 'required|string|in:pending,processing,shipped,delivered,cancelled'
         ]);
 
         $order = Order::findOrFail($id);

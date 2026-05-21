@@ -12,6 +12,8 @@ class Banner extends Model
     protected $fillable = [
         'title',
         'subtitle',
+        'button_text',
+        'button_link',
         'description',
         'start_date',
         'end_date',
