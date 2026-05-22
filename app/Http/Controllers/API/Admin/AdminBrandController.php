@@ -8,6 +8,7 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use App\Services\ImageUploadService;
+use Illuminate\Support\Facades\DB;
 
 class AdminBrandController extends Controller
 {
@@ -45,23 +46,38 @@ class AdminBrandController extends Controller
     // ===============================
     // ✅ GET BRANDS BY CATEGORY (MAIN LOGIC WITH NESTED SUPPORT)
     // ===============================
-    public function getBrandsByCategory($categoryId)
-    {
-        // Get all descendant category IDs (including the selected category and all nested children)
-        $categoryIds = $this->getAllDescendantCategoryIds($categoryId);
+    // public function getBrandsByCategory($categoryId)
+    // {
+    //     // Get all descendant category IDs (including the selected category and all nested children)
+    //     $categoryIds = $this->getAllDescendantCategoryIds($categoryId);
         
-        $brands = Brand::whereHas('subcategories', function ($q) use ($categoryIds) {
-            $q->whereIn('categories.id', $categoryIds);
-        })
-            ->with('subcategories:id,name,parent_id')
-            ->get();
+    //     $brands = Brand::whereHas('subcategories', function ($q) use ($categoryIds) {
+    //         $q->whereIn('categories.id', $categoryIds);
+    //     })
+    //         ->with('subcategories:id,name,parent_id')
+    //         ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => $brands
-        ]);
-    }
-    
+    //     return response()->json([
+    //         'success' => true,
+    //         'data' => $brands
+    //     ]);
+    // }
+ public function getBrandsByCategory($categoryId)
+{
+    $subcategoryIds = Category::where('parent_id', $categoryId)
+        ->pluck('id');
+
+    $brands = Brand::whereHas('subcategories', function ($q) use ($subcategoryIds) {
+            $q->whereIn('categories.id', $subcategoryIds);
+        })
+        ->with('subcategories:id,name,parent_id')
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'data' => $brands
+    ]);
+}
     // ===============================
     // ✅ HELPER: GET ALL DESCENDANT CATEGORY IDS (RECURSIVE)
     // ===============================
