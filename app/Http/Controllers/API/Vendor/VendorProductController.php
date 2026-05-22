@@ -32,13 +32,27 @@ class VendorProductController extends Controller
         ];
     }
 
+    // private function vendorProductQuery($user)
+    // {
+    //     return Product::where(function ($q) use ($user) {
+    //         $q->where('vendor_id', optional($user->vendor)->id)
+    //             ->orWhere('user_id', $user->id);
+    //     });
+    // }
+
     private function vendorProductQuery($user)
-    {
-        return Product::where(function ($q) use ($user) {
-            $q->where('vendor_id', optional($user->vendor)->id)
-                ->orWhere('user_id', $user->id);
-        });
+{
+    // ✅ ADMIN bypass
+    //dd($user);
+    if ($user->role_id === 1) {
+        return Product::query(); // no restriction
     }
+
+    return Product::where(function ($q) use ($user) {
+        $q->where('vendor_id', optional($user->vendor)->id)
+          ->orWhere('user_id', $user->id);
+    });
+}
 
     // ✅ STORE PRODUCT
     public function store(Request $request)
@@ -114,6 +128,8 @@ class VendorProductController extends Controller
     // ✅ GET PRODUCT - FIXED with all missing fields
     public function getProductById($id)
     {
+
+   
         $product = $this->vendorProductQuery(auth()->user())
             ->with([
                 'category',

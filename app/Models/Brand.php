@@ -18,6 +18,16 @@ class Brand extends Model
 }
 // App\Models\Brand.php
 
+// public function subcategories()
+// {
+//     return $this->belongsToMany(
+//         Category::class,
+//         'brand_subcategory',
+//         'brand_id',
+//         'subcategory_id'
+//     )->whereNotNull('parent_id'); // 🔥 ensures only subcategories
+// }
+
 public function subcategories()
 {
     return $this->belongsToMany(
@@ -25,6 +35,6 @@ public function subcategories()
         'brand_subcategory',
         'brand_id',
         'subcategory_id'
-    )->whereNotNull('parent_id'); // 🔥 ensures only subcategories
+    );
 }
 }
