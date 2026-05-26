@@ -106,14 +106,13 @@ Route::put('/cart/{id}', [CartController::class, 'updateCartItem']);
 Route::delete('/cart-item/{id}', [CartController::class, 'deleteCartItem']);
 Route::delete('/cart/clear', [CartController::class, 'clearCart']);
 
-// ==================== CATEGORY ROUTES (With category permissions) ====================
+
 Route::prefix('categories')->group(function () {
     Route::get('/', [CategoryController::class, 'index']);
-    Route::get('/{id}', [CategoryController::class, 'show']);
-    Route::get('/{id}/children', [CategoryController::class, 'children']);
     Route::get('/{slug}/products', [CategoryController::class, 'products']);
+    Route::get('/{id}/children', [CategoryController::class, 'children']);
+    Route::get('/id/{id}', [CategoryController::class, 'show']);
 });
-
 // ==================== PRODUCT ROUTES (With product permissions) ====================
 // 🔓 PUBLIC ROUTES
 Route::prefix('products')->group(function () {
@@ -150,11 +149,11 @@ Route::prefix('vendors')->group(function () {
 Route::get('/coupon/available', [CouponController::class, 'availableCoupons'])->middleware('permission:coupon.view');
 Route::post('/coupon/validate', [CouponController::class, 'validateCoupon'])->middleware('permission:coupon.view');
 
-// ==================== VENDOR REGISTRATION (Public) ====================
+
 
 // ==================== ADMIN BANNERS PUBLIC VIEW ====================
 Route::get('admin/banners', [AdminBannerController::class, 'getBanners']);
- Route::get('/brands', [AdminBrandController::class, 'index']);
+Route::get('/brands', [AdminBrandController::class, 'index']);
 
 // ==================== AUTHENTICATED ROUTES (All require auth:sanctum + permissions) ====================
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -296,6 +295,7 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
         Route::get('/vendors/pending', [AdminDashboardController::class, 'pendingVendors'])->middleware('permission:vendor.view');
 
         // Admin Category Management
+        
         Route::post('/categories', [AdminCategoryController::class, 'store']);
         Route::post('/subcategories', [AdminCategoryController::class, 'storeSubcategory']);
         Route::put('/categories/{id}', [AdminCategoryController::class, 'updateCategory'])->middleware('permission:category.update');
@@ -328,12 +328,10 @@ Route::get('/vendor/coupons/{id}', [VendorCouponController::class, 'show'])
         Route::delete('/banners/{id}', [AdminBannerController::class, 'deleteBanner']);
 
 
-
-
         Route::prefix('brands')->group(function () {
             Route::post('/', [AdminBrandController::class, 'store']);
             Route::get('/{brand}', [AdminBrandController::class, 'show']);
-            Route::post('/{brand}', [AdminBrandController::class, 'update']); // for form-data
+            Route::put('/{brand}', [AdminBrandController::class, 'update']);
             Route::delete('/{brand}', [AdminBrandController::class, 'destroy']);
 
         });

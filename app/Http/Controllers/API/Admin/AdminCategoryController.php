@@ -118,7 +118,53 @@ public function storeSubcategory(Request $request)
         'data' => $subcategory
     ]);
 }
+public function deleteCategory($id)
+{
+    $category = Category::find($id);
 
+    if (!$category) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Category not found'
+        ], 404);
+    }
+
+    // ❌ Ensure it's actually a parent category
+    if (!is_null($category->parent_id)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'This is not a parent category'
+        ], 400);
+    }
+
+    // ❌ Prevent delete if subcategories exist
+    if (Category::where('parent_id', $id)->exists()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Category has subcategories. Cannot delete.'
+        ], 400);
+    }
+
+    // ❌ Prevent delete if products exist directly under this category
+    if (Product::where('category_id', $id)->exists()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Category has products. Cannot delete.'
+        ], 400);
+    }
+
+    // 🗑️ Delete image if exists
+    if ($category->image) {
+        ImageUploadService::deleteImage($category->image);
+    }
+
+    $category->delete();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Category deleted successfully'
+    ]);
+}
 public function deleteSubcategory($id)
 {
     $subcategory = Category::find($id);

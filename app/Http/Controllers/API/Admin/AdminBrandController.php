@@ -50,7 +50,7 @@ class AdminBrandController extends Controller
     // {
     //     // Get all descendant category IDs (including the selected category and all nested children)
     //     $categoryIds = $this->getAllDescendantCategoryIds($categoryId);
-        
+
     //     $brands = Brand::whereHas('subcategories', function ($q) use ($categoryIds) {
     //         $q->whereIn('categories.id', $categoryIds);
     //     })
@@ -62,53 +62,69 @@ class AdminBrandController extends Controller
     //         'data' => $brands
     //     ]);
     // }
- public function getBrandsByCategory($categoryId)
-{
-    $subcategoryIds = Category::where('parent_id', $categoryId)
-        ->pluck('id');
+    public function getBrandsByCategory($categoryId)
+    {
+        $category = Category::find($categoryId);
 
-    $brands = Brand::whereHas('subcategories', function ($q) use ($subcategoryIds) {
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found'
+            ], 404);
+        }
+
+        // If category has children, use children IDs
+        $subcategoryIds = Category::where('parent_id', $categoryId)
+            ->pluck('id');
+
+        // If no children, assume this is already a subcategory
+        if ($subcategoryIds->isEmpty()) {
+            $subcategoryIds = collect([$categoryId]);
+        }
+
+        $brands = Brand::whereHas('subcategories', function ($q) use ($subcategoryIds) {
             $q->whereIn('categories.id', $subcategoryIds);
         })
-        ->with('subcategories:id,name,parent_id')
-        ->get();
+            ->select('id', 'name')
+            ->distinct()
+            ->get();
 
-    return response()->json([
-        'success' => true,
-        'data' => $brands
-    ]);
-}
+        return response()->json([
+            'success' => true,
+            'data' => $brands
+        ]);
+    }
     // ===============================
     // ✅ HELPER: GET ALL DESCENDANT CATEGORY IDS (RECURSIVE)
     // ===============================
     private function getAllDescendantCategoryIds($categoryId)
     {
         $ids = collect([$categoryId]);
-        
+
         // Get immediate children
         $children = Category::where('parent_id', $categoryId)->get();
-        
+
         foreach ($children as $child) {
             // Recursively get all descendants
             $ids = $ids->merge($this->getAllDescendantCategoryIds($child->id));
         }
-        
+
         return $ids->unique()->values()->toArray();
     }
-    
+
     // ===============================
     // ✅ GET NESTED CATEGORIES TREE (OPTIONAL)
     // ===============================
     public function getNestedCategories()
     {
         $categories = Category::with('children')->whereNull('parent_id')->get();
-        
+
         return response()->json([
             'success' => true,
             'data' => $this->formatCategoryTree($categories)
         ]);
     }
-    
+
     // ===============================
     // ✅ HELPER: FORMAT CATEGORY TREE
     // ===============================
@@ -246,32 +262,32 @@ class AdminBrandController extends Controller
         // Delete brand
         $brand->delete();
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Brand deleted successfully'
-    ]);
-}
+        return response()->json([
+            'success' => true,
+            'message' => 'Brand deleted successfully'
+        ]);
+    }
 
-public function products(Brand $brand)
-{
-    $products = $brand
-        ->products()
-        ->with([
-            'images:id,product_id,image_url,is_primary'
-        ])
-        ->latest('id')
-        ->paginate(20);
+    public function products(Brand $brand)
+    {
+        $products = $brand
+            ->products()
+            ->with([
+                'images:id,product_id,image_url,is_primary'
+            ])
+            ->latest('id')
+            ->paginate(20);
 
-    return response()->json([
-        'success' => true,
-        'brand' => [
-            'id' => $brand->id,
-            'name' => $brand->name,
-            'logo' => $brand->logo,
-        ],
-        'data' => $products
-    ]);
-}
+        return response()->json([
+            'success' => true,
+            'brand' => [
+                'id' => $brand->id,
+                'name' => $brand->name,
+                'logo' => $brand->logo,
+            ],
+            'data' => $products
+        ]);
+    }
 
 
 }
