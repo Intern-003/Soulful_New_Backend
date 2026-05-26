@@ -7,46 +7,42 @@ use Illuminate\Http\Request;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Support\Facades\Auth;
 
 class CartController extends Controller
 {
-    /**
-     * 🔁 Common method to return full cart response
-     */
+    /* =========================
+        RESPONSE FORMAT
+    ========================= */
     private function formatCartResponse($cart, $guestToken = null)
     {
-
         $cart->loadMissing([
             'items.product.images',
             'items.variant'
         ]);
 
-        $totals = $this->calculateTotals($cart);
-
         return response()->json([
             'success' => true,
             'data' => [
                 'cart' => $cart,
-                'totals' => $totals
+                'totals' => $this->calculateTotals($cart)
             ],
             'guest_token' => $guestToken
         ]);
     }
 
-    /**
-     * 🛒 GET CART
-     */
+    /* =========================
+        GET CART
+    ========================= */
     public function getCart(Request $request)
     {
         $user = Auth::guard('sanctum')->user();
         $guestToken = $request->header('Guest-Token');
 
-
         if (!$user && !$guestToken) {
             $guestToken = bin2hex(random_bytes(16));
 
-            // ✅ CREATE CART IMMEDIATELY
             $cart = Cart::create([
                 'guest_token' => $guestToken
             ]);
@@ -73,9 +69,9 @@ class CartController extends Controller
         return $this->formatCartResponse($cart, $user ? null : $guestToken);
     }
 
-    /**
-     * ➕ ADD TO CART
-     */
+    /* =========================
+        ADD TO CART (FIXED)
+    ========================= */
     public function addToCart(Request $request)
     {
         $request->validate([
@@ -87,53 +83,74 @@ class CartController extends Controller
         $user = Auth::guard('sanctum')->user();
         $guestToken = $request->header('Guest-Token');
 
+        $product = Product::findOrFail($request->product_id);
+        $variant = null;
+
+        if ($request->variant_id) {
+            $variant = ProductVariant::findOrFail($request->variant_id);
+        }
+
+        $stock = $this->getStock($product, $variant);
+
+        if ($stock <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Out of stock'
+            ], 422);
+        }
+
+        // cart resolve
         if ($user) {
             $cart = Cart::firstOrCreate(['user_id' => $user->id]);
 
             if ($guestToken) {
                 $this->mergeGuestCart($guestToken, $cart);
-                $cart->update([
-                    'user_id' => $user->id,
-                    'guest_token' => null
-                ]);
+                $cart->update(['guest_token' => null]);
             }
-
-            $guestToken = null;
         } else {
-            if (!$guestToken) {
-                $guestToken = bin2hex(random_bytes(16));
-            }
-
+            $guestToken = $guestToken ?? bin2hex(random_bytes(16));
             $cart = Cart::firstOrCreate(['guest_token' => $guestToken]);
         }
 
-        $product = Product::findOrFail($request->product_id);
-
         $item = CartItem::where([
             'cart_id' => $cart->id,
-            'product_id' => $request->product_id,
+            'product_id' => $product->id,
             'variant_id' => $request->variant_id
         ])->first();
 
+        $currentQty = $item?->quantity ?? 0;
+        $newQty = $currentQty + $request->quantity;
+
+        if ($newQty > $stock) {
+            return response()->json([
+                'success' => false,
+                'message' => "Only {$stock} items available"
+            ], 422);
+        }
+
+        $price = $variant->price ?? $product->price;
+
         if ($item) {
-            $item->quantity += $request->quantity;
-            $item->save();
+            $item->update([
+                'quantity' => $newQty,
+                'price' => $price
+            ]);
         } else {
             CartItem::create([
                 'cart_id' => $cart->id,
-                'product_id' => $request->product_id,
+                'product_id' => $product->id,
                 'variant_id' => $request->variant_id,
                 'quantity' => $request->quantity,
-                'price' => $product->price
+                'price' => $price
             ]);
         }
 
         return $this->formatCartResponse($cart, $guestToken);
     }
 
-    /**
-     * 🔄 UPDATE CART ITEM
-     */
+    /* =========================
+        UPDATE CART ITEM
+    ========================= */
     public function updateCartItem(Request $request, $id)
     {
         $request->validate([
@@ -143,51 +160,53 @@ class CartController extends Controller
         $user = Auth::guard('sanctum')->user();
         $guestToken = $request->header('Guest-Token');
 
-        $cartItem = CartItem::where('id', $id)
-            ->whereHas('cart', function ($q) use ($user, $guestToken) {
-                if ($user) {
-                    $q->where('user_id', $user->id);
-                } elseif ($guestToken) {
-                    $q->where('guest_token', $guestToken);
-                }
-            })
+        $item = CartItem::where('id', $id)
+            ->whereHas('cart', fn($q) =>
+                $user ? $q->where('user_id', $user->id)
+                      : $q->where('guest_token', $guestToken)
+            )
             ->firstOrFail();
 
-        $cartItem->update(['quantity' => $request->quantity]);
+        $stock = $this->getStock($item->product, $item->variant);
 
-        $cart = $cartItem->cart;
+        if ($request->quantity > $stock) {
+            return response()->json([
+                'success' => false,
+                'message' => "Only {$stock} items available"
+            ], 422);
+        }
 
-        return $this->formatCartResponse($cart, $guestToken);
+        $item->update([
+            'quantity' => $request->quantity
+        ]);
+
+        return $this->formatCartResponse($item->cart, $guestToken);
     }
 
-    /**
-     * ❌ REMOVE ITEM
-     */
+    /* =========================
+        DELETE ITEM
+    ========================= */
     public function deleteCartItem(Request $request, $id)
     {
         $user = Auth::guard('sanctum')->user();
         $guestToken = $request->header('Guest-Token');
 
-        $cartItem = CartItem::where('id', $id)
-            ->whereHas('cart', function ($q) use ($user, $guestToken) {
-                if ($user) {
-                    $q->where('user_id', $user->id);
-                } elseif ($guestToken) {
-                    $q->where('guest_token', $guestToken);
-                }
-            })
+        $item = CartItem::where('id', $id)
+            ->whereHas('cart', fn($q) =>
+                $user ? $q->where('user_id', $user->id)
+                      : $q->where('guest_token', $guestToken)
+            )
             ->firstOrFail();
 
-        $cart = $cartItem->cart;
-
-        $cartItem->delete();
+        $cart = $item->cart;
+        $item->delete();
 
         return $this->formatCartResponse($cart, $guestToken);
     }
 
-    /**
-     * 🧹 CLEAR CART
-     */
+    /* =========================
+        CLEAR CART
+    ========================= */
     public function clearCart(Request $request)
     {
         $user = Auth::guard('sanctum')->user();
@@ -212,12 +231,24 @@ class CartController extends Controller
         ]);
     }
 
-    /**
-     * 🧮 TOTALS
-     */
+    /* =========================
+        STOCK RESOLVER (IMPORTANT)
+    ========================= */
+    private function getStock($product, $variant = null)
+    {
+        if ($variant) return $variant->stock ?? 0;
+        return $product->stock ?? 0;
+    }
+
+    /* =========================
+        TOTALS
+    ========================= */
     protected function calculateTotals(Cart $cart)
     {
-        $subtotal = $cart->items->sum(fn($item) => $item->price * $item->quantity);
+        $subtotal = $cart->items->sum(
+            fn($item) => $item->price * $item->quantity
+        );
+
         $shipping = 50;
         $discount = $cart->discount_amount ?? 0;
 
@@ -239,30 +270,35 @@ class CartController extends Controller
         ];
     }
 
-    /**
-     * 🔁 MERGE GUEST CART
-     */
+    /* =========================
+        MERGE GUEST CART
+    ========================= */
     public function mergeGuestCart($guestToken, Cart $userCart)
     {
-        $guestCart = Cart::with('items')->where('guest_token', $guestToken)->first();
+        $guestCart = Cart::with(['items.product', 'items.variant'])
+            ->where('guest_token', $guestToken)
+            ->first();
 
-        if (!$guestCart)
-            return;
+        if (!$guestCart) return;
 
         foreach ($guestCart->items as $item) {
+
+            $stock = $this->getStock($item->product, $item->variant);
+
             $existing = $userCart->items()->where([
                 ['product_id', $item->product_id],
                 ['variant_id', $item->variant_id]
             ])->first();
 
             if ($existing) {
-                $existing->quantity += $item->quantity;
-                $existing->save();
+                $existing->update([
+                    'quantity' => min($existing->quantity + $item->quantity, $stock)
+                ]);
             } else {
                 $userCart->items()->create([
                     'product_id' => $item->product_id,
                     'variant_id' => $item->variant_id,
-                    'quantity' => $item->quantity,
+                    'quantity' => min($item->quantity, $stock),
                     'price' => $item->price
                 ]);
             }

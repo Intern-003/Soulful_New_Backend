@@ -17,7 +17,7 @@ class OrderController extends Controller
     // GET /orders
     public function index(Request $request)
     {
-        $orders = Order::with(['items.product', 'address'])
+        $orders = Order::with(['items.product', 'items.product.images', 'address'])
             ->where('user_id', $request->user()->id)
             ->latest()
             ->paginate(10);
@@ -35,6 +35,7 @@ class OrderController extends Controller
         $order = Order::with([
             'items.product',
             'items.variant',
+            'items.product.images',
             'items.vendor',
             'address',
             'payments',
@@ -100,6 +101,7 @@ class OrderController extends Controller
         //dd($id);
         $order = Order::with([
             'items.product',
+             'items.product.images',
             'items.vendor',
             'address'
         ])
@@ -134,11 +136,27 @@ class OrderController extends Controller
             ], 400);
         }
 
+        // $request->validate([
+        //     'address_id' => 'required|exists:addresses,id',
+        //     'payment_method' => 'required|string'
+        // ]);
+
         $request->validate([
-            'address_id' => 'required|exists:addresses,id',
+            'address_id' => 'nullable|exists:addresses,id',
+
+            'address' => 'required_without:address_id|string',
+            'city' => 'required_without:address_id|string',
+            'state' => 'required_without:address_id|string',
+            'zip' => 'required_without:address_id|string',
+            'country' => 'required_without:address_id|string',
+
+            'name' => 'nullable|string',
+            'phone' => 'required|string',
+
+
+
             'payment_method' => 'required|string'
         ]);
-
         $cart = Cart::with('items.product')
             ->where('user_id', $user->id)
             ->first();
@@ -149,21 +167,46 @@ class OrderController extends Controller
                 'message' => 'Cart is empty'
             ]);
         }
-
         $order = null;
 
         DB::transaction(function () use ($cart, $user, $request, &$order) {
 
-            $subtotal = $cart->items->sum(fn($item) => $item->product->price * $item->quantity);
+            $addressId = $request->address_id;
+
+            if (!$addressId) {
+                $address = \App\Models\Address::create([
+                    'user_id' => $user->id,
+                    'name' => $request->name ?? $user->name ?? 'Customer',
+                    'phone' => $request->phone,
+
+                    'address_line1' => $request->address,
+                    'address_line2' => null,
+
+                    'city' => $request->city,
+                    'state' => $request->state,
+                    'country' => $request->country,
+
+                    'postal_code' => $request->zip,
+                ]);
+
+                $addressId = $address->id;
+            }
+
+            $subtotal = $cart->items->sum(
+                fn($item) =>
+                $item->product->price * $item->quantity
+            );
+
             $shipping = 50;
             $tax = 0;
             $discount = 0;
+
             $total = $subtotal + $shipping + $tax - $discount;
 
             $order = Order::create([
                 'user_id' => $user->id,
                 'order_number' => 'ORD-' . time() . rand(100, 999),
-                'address_id' => $request->address_id,
+                'address_id' => $addressId,
                 'subtotal' => $subtotal,
                 'tax' => $tax,
                 'shipping_cost' => $shipping,
@@ -174,7 +217,6 @@ class OrderController extends Controller
                 'order_status' => 'placed'
             ]);
 
-            // ✅ ADD HISTORY
             OrderStatusHistory::create([
                 'order_id' => $order->id,
                 'status' => 'placed',
@@ -187,29 +229,23 @@ class OrderController extends Controller
                     ->first();
 
                 if (!$product) {
-                    throw new \Exception("Product not found: ID {$item->product_id}");
+                    throw new \Exception("Product not found");
                 }
 
                 if ($item->quantity > $product->stock) {
-                    throw new \Exception("Insufficient stock for product: {$product->name}");
+                    throw new \Exception("Only {$product->stock} items available for {$product->name}");
                 }
-
-                if (!$product->vendor_id && !$product->user_id) {
-                    throw new \Exception("Product {$product->name} has no owner assigned");
-                }
-
-                $itemTotal = $product->price * $item->quantity;
 
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'variant_id' => $item->variant_id,
-                    'vendor_id' => $product->vendor_id ?? null,
-                    'creator_id' => $product->user_id ?? null,
                     'quantity' => $item->quantity,
                     'price' => $product->price,
-                    'total' => $itemTotal,
-                    'status' => 'pending'
+                    'total' => $product->price * $item->quantity,
+                    'status' => 'pending',
+                     'vendor_id' => $product->vendor_id,
+                    'user_id' => $product->user_id,
                 ]);
 
                 $product->decrement('stock', $item->quantity);
@@ -217,7 +253,6 @@ class OrderController extends Controller
 
             $cart->items()->delete();
         });
-
         if ($order) {
             $order->load('items.product', 'items.vendor', 'address');
         }
@@ -236,31 +271,42 @@ class OrderController extends Controller
     }
 
     public function cancel(Request $request, $id)
-    {
-        $order = Order::where('user_id', $request->user()->id)
-            ->findOrFail($id);
+{
+    $order = Order::with('items')
+        ->where('user_id', $request->user()->id)
+        ->findOrFail($id);
 
-        if (!in_array($order->order_status, ['placed', 'processing'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Order cannot be cancelled'
-            ], 400);
+    if (!in_array($order->order_status, ['placed', 'processing'])) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Order cannot be cancelled'
+        ], 400);
+    }
+
+    DB::transaction(function () use ($order) {
+
+        foreach ($order->items as $item) {
+
+            Product::where('id', $item->product_id)
+                ->increment('stock', $item->quantity);
         }
 
-        $order->update(['order_status' => 'cancelled']);
+        $order->update([
+            'order_status' => 'cancelled'
+        ]);
 
-        // ✅ ADD HISTORY
         OrderStatusHistory::create([
             'order_id' => $order->id,
             'status' => 'cancelled',
             'note' => 'Order cancelled by user'
         ]);
+    });
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Order cancelled successfully'
-        ]);
-    }
+    return response()->json([
+        'success' => true,
+        'message' => 'Order cancelled successfully'
+    ]);
+}
 
     public function return(Request $request, $id)
     {
