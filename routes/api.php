@@ -111,7 +111,7 @@ Route::prefix('categories')->group(function () {
     Route::get('/', [CategoryController::class, 'index']);
     Route::get('/{slug}/products', [CategoryController::class, 'products']);
     Route::get('/{id}/children', [CategoryController::class, 'children']);
-    Route::get('/id/{id}', [CategoryController::class, 'show']);
+    Route::get('/{id}', [CategoryController::class, 'show']);
 });
 // ==================== PRODUCT ROUTES (With product permissions) ====================
 // 🔓 PUBLIC ROUTES
