@@ -263,7 +263,7 @@ class VendorProductController extends Controller
         $request->validate([
             'name' => 'sometimes|string|max:255',
             'category_id' => 'sometimes|exists:categories,id',
-            'brand_id' => 'sometimes|exists:brands,id',
+            'brand_id' => 'nullable|exists:brands,id',
             'short_description' => 'nullable|string',  // ✅ ADDED validation
             'description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:0',
