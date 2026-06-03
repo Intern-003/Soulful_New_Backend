@@ -53,12 +53,7 @@ class ProfileController extends Controller
         ]);
     }
 
-    // ----------------------------
-    // Upload Avatar
-    // ----------------------------
-// ----------------------------
-// Upload Avatar
-// ----------------------------
+
 public function uploadAvatar(Request $request)
 {
     $request->validate([
@@ -93,15 +88,13 @@ public function uploadAvatar(Request $request)
     }
 
     return response()->json([
-        'success' => true,
-        'message' => 'Avatar uploaded successfully',
-        'avatar_url' => asset($profile->avatar)
-    ]);
+    'success' => true,
+    'message' => 'Avatar uploaded successfully',
+    'avatar_url' => $profile->avatar
+]);
 }
 
-    // ----------------------------
-    // Delete Avatar
-    // ----------------------------
+
 // ----------------------------
 // Delete Avatar
 // ----------------------------
