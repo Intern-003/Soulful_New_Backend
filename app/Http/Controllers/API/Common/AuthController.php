@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 use App\Http\Controllers\API\Common\OtpController;
 use App\Models\Otp;
 use App\Services\MailService;
+use App\Models\Role;
 
 class AuthController extends Controller
 {
@@ -141,7 +142,7 @@ class AuthController extends Controller
         // Verify OTP
         if ($record->otp != $request->otp) {
             $record->increment('attempts');
-            
+
             // Block after 5 failed attempts
             if ($record->attempts >= 5) {
                 $record->update([
@@ -152,7 +153,7 @@ class AuthController extends Controller
                     'message' => 'Too many failed attempts. Account blocked for 15 minutes.'
                 ], 429);
             }
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid OTP. ' . (5 - $record->attempts) . ' attempts remaining.'
@@ -176,12 +177,21 @@ class AuthController extends Controller
         $emailVerifiedAt = $record->type === 'email' ? now() : null;
         $phoneVerifiedAt = $record->type === 'phone' ? now() : null;
 
+        $userRole = Role::where('name', 'user')->first();
+
+        if (!$userRole) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User role not found in roles table.'
+            ], 500);
+        }
+
         $user = User::create([
             'name' => $record->name,
             'email' => $record->email,
             'phone' => $record->phone,
             'password' => $record->password, // Already hashed
-            'role_id' => 2,
+            'role_id' => $userRole->id,   // ✅ dynamic
             'status' => true,
             'email_verified_at' => $emailVerifiedAt,
             'phone_verified_at' => $phoneVerifiedAt,
@@ -232,7 +242,7 @@ class AuthController extends Controller
 
         // Generate new OTP
         $newOtp = rand(100000, 999999);
-        
+
         $record->update([
             'otp' => $newOtp,
             'attempts' => 0,

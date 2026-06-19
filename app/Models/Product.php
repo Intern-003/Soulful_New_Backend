@@ -30,6 +30,7 @@ class Product extends Model
         'is_featured',
         'approval_status',
         'commission',
+        'commission_type',
         'rejection_reason',
         'approved_by',
         'approved_at'
@@ -37,6 +38,7 @@ class Product extends Model
 
     protected $casts = [
         'status' => 'boolean',
+        'commission_type' => 'string',
         'is_featured' => 'boolean',
         'approved_at' => 'datetime'
     ];
@@ -90,5 +92,10 @@ class Product extends Model
         return $this->belongsToMany(Banner::class, 'banner_products')
             ->withPivot('position');
     }
+
+    public function orderItems()
+{
+    return $this->hasMany(OrderItem::class, 'product_id');
+}
     
 }

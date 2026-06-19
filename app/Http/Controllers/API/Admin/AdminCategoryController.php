@@ -30,8 +30,30 @@ class AdminCategoryController extends Controller
 
         return $slug;
     }
+public function index(Request $request)
+{
+    $query = Category::with(['parent', 'children'])
+        ->when($request->parent_id === 'null' || !$request->has('parent_id'), function($q) {
+            return $q->whereNull('parent_id');
+        })
+        ->when($request->parent_id && $request->parent_id !== 'null', function($q) use ($request) {
+            return $q->where('parent_id', $request->parent_id);
+        })
+        ->when($request->search, function($q) use ($request) {
+            return $q->where('name', 'like', '%' . $request->search . '%');
+        })
+        ->orderBy('position', 'asc')
+        ->orderBy('name', 'asc');
 
-    // POST /admin/categories
+    $categories = $request->per_page 
+        ? $query->paginate($request->per_page)
+        : $query->get();
+
+    return response()->json([
+        'success' => true,
+        'data' => $categories
+    ]);
+}
 // POST /admin/categories
 public function store(Request $request)
 {

@@ -15,14 +15,7 @@ class Permission extends Model
         'action',  // create
     ];
 
-    /**
-     * Many-to-Many: Permission ↔ Roles
-     */
-    // public function roles()
-    // {
-    //     return $this->belongsToMany(Role::class, 'role_permissions');
-    // }
-
+  
      public function roles()
     {
         return $this->belongsToMany(
