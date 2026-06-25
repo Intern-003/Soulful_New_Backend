@@ -53,7 +53,11 @@ use App\Http\Controllers\API\Common\OtpController;
 use App\Http\Controllers\API\Common\BannerController;
 use App\Http\Controllers\API\Admin\AdminCouponController;
 use App\Http\Controllers\API\Vendor\VendorPayoutController;
-
+use App\Http\Controllers\API\Vendor\StoreSettingsController;
+use App\Http\Controllers\API\Vendor\VendorStoreBannerController;
+use App\Http\Controllers\API\Vendor\VendorStoreSectionController;
+use App\Http\Controllers\API\Vendor\StoreManagementController;
+use App\Http\Controllers\API\User\VendorFollowController;
 /*
 |--------------------------------------------------------------------------
 | API Routes - PUBLIC ROUTES (No authentication required)
@@ -101,6 +105,40 @@ Route::prefix('vendors')->group(function () {
     Route::get('/{slug}', [VendorStoreController::class, 'show']);
     Route::get('/{slug}/products', [VendorStoreController::class, 'products']);
     Route::get('/{slug}/reviews', [VendorStoreController::class, 'reviews']);
+    Route::get('/{slug}/homepage',[VendorStoreController::class, 'homepage']); 
+});
+
+
+Route::middleware('auth:sanctum')->group(function () {
+Route::post( '/vendors/{slug}/follow', [VendorFollowController::class, 'follow']);
+Route::delete('/vendors/{slug}/follow',[VendorFollowController::class, 'unfollow']);});
+Route::get('/vendors/{slug}/followers',[VendorFollowController::class, 'followers']);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Store Management
+        |--------------------------------------------------------------------------
+        */
+Route::prefix('vendor')->middleware('auth:sanctum')->group(function () {
+Route::get('/store-management', [StoreManagementController::class, 'index'])->middleware('permission:store.view');
+Route::put('/store-management/save', [StoreManagementController::class, 'save'])->middleware('permission:store.update');
+Route::put('/store-settings',[StoreSettingsController::class, 'update'])->middleware('permission:store.update');
+        /*
+        |--------------------------------------------------------------------------
+        | Store Banners
+        |--------------------------------------------------------------------------
+        */
+Route::get(  '/store-banners', [VendorStoreBannerController::class, 'index'])->middleware('permission:storebanner.view');
+Route::post('/store-banners',[VendorStoreBannerController::class, 'store'])->middleware('permission:storebanner.create');
+Route::delete('/store-banners/{id}',[VendorStoreBannerController::class, 'destroy'])->middleware('permission:storebanner.delete');
+        /*
+        |--------------------------------------------------------------------------
+        | Store Sections
+        |--------------------------------------------------------------------------
+        */
+Route::get('/store-sections',[VendorStoreSectionController::class, 'index'])->middleware('permission:storesection.view');
+Route::post('/store-sections',[VendorStoreSectionController::class, 'store'])->middleware('permission:storesection.create');
+Route::delete('/store-sections/{id}',[VendorStoreSectionController::class, 'destroy'])->middleware('permission:storesection.delete');
 });
 
 // ==================== PUBLIC COUPON ROUTES ====================

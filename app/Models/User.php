@@ -137,4 +137,13 @@ class User extends Authenticatable
     {
         return $this->status === true;
     }
+
+    public function followedStores()
+{
+    return $this->hasMany(
+        VendorFollower::class
+    );
+}
+
+
 }
