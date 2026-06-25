@@ -116,7 +116,16 @@ class Vendor extends Model
         'rating',
         'status',
         'approved_by',
-        'approved_at'
+        'approved_at',
+        'store_about',
+'theme_color',
+
+'facebook_url',
+'instagram_url',
+'twitter_url',
+'youtube_url',
+
+'followers_count'
     ];
 
     protected $casts = ['approved_at' => 'datetime'];
@@ -201,4 +210,26 @@ class Vendor extends Model
     {
         return $this->hasMany(CommissionLog::class);
     }
+    public function storeBanners()
+{
+    return $this->hasMany(
+        VendorStoreBanner::class
+    );
+}
+
+public function followers()
+{
+    return $this->hasMany(
+        VendorFollower::class
+    );
+}
+public function storeSections()
+{
+    return $this->hasMany(
+        VendorStoreSection::class
+    );
+} 
+
+
+
 }
